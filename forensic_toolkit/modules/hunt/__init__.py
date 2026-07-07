@@ -73,8 +73,14 @@ class HuntModule(ModuleBase):
         name="hunt",
         description="搜索文件中的敏感信息（密钥、邮箱、信用卡等）",
         author="Forensic Toolkit",
-        version="0.2.0",
+        version="0.3.0",
     )
+
+    # 上限参数
+    _MAX_READ = 500 * 1024 * 1024          # 500 MiB：小于此值一次性读入内存
+    _CHUNK = 1 * 1024 * 1024               # 1 MiB 流式块
+    _OVERLAP = 256                          # 跨块重叠缓冲区
+    _MAX_RESULTS = 200
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -86,33 +92,67 @@ class HuntModule(ModuleBase):
         if not path.exists():
             return {"error": f"路径不存在: {path}"}
 
-        try:
-            data = path.read_bytes()
-        except Exception as e:
-            return {"error": str(e)}
+        file_size = path.stat().st_size
+        results: list[dict] = []
+        offset_base = 0
 
-        text = data.decode("utf-8", errors="replace")
-        results = []
+        try:
+            if file_size <= self._MAX_READ:
+                data = path.read_bytes()
+                text = data.decode("utf-8", errors="replace")
+                self._scan_text(text, results, 0)
+            else:
+                with open(path, "rb") as f:
+                    leftover = b""
+                    while True:
+                        chunk = f.read(self._CHUNK)
+                        if not chunk:
+                            break
+                        raw = leftover + chunk
+                        try:
+                            text = raw.decode("utf-8", errors="replace")
+                        except Exception:
+                            text = raw.decode("latin-1", errors="replace")
+                        self._scan_text(text, results, offset_base)
+                        if len(results) >= self._MAX_RESULTS:
+                            break
+                        offset_base += max(0, len(raw) - len(leftover) - self._OVERLAP)
+                        leftover = raw[-self._OVERLAP:] if len(raw) >= self._OVERLAP else raw
+        except MemoryError:
+            return {
+                "error": "文件过大，内存不足。请尝试更小的文件或拆分为多个部分扫描。",
+                "source": str(path.resolve()),
+                "file_size": file_size,
+            }
+        except Exception as e:
+            return {"error": str(e), "source": str(path.resolve())}
+
+        results.sort(key=lambda x: x["offset"])
+        return {
+            "source": str(path.resolve()),
+            "file_size": file_size,
+            "hits": len(results),
+            "scan_mode": "stream" if file_size > self._MAX_READ else "full",
+            "results": results[:self._MAX_RESULTS],
+        }
+
+    def _scan_text(self, text: str, results: list[dict], offset: int) -> None:
+        """对一段文本依次运行所有已选模式，匹配结果追加到 results。"""
         for key, (label, pattern) in _PATTERNS.items():
             if self._mode != "all" and key != self._mode:
                 continue
             for m in pattern.finditer(text):
+                if len(results) >= self._MAX_RESULTS:
+                    return
                 match_text = m.group()[:80]
-                # 信用卡号走 Luhn 校验
                 if key == "credit_card" and not _luhn_check(match_text):
                     continue
                 results.append({
                     "type": label,
                     "pattern": key,
-                    "offset": m.start(),
+                    "offset": offset + m.start(),
                     "match": match_text,
                 })
-
-        return {
-            "source": str(path.resolve()),
-            "hits": len(results),
-            "results": results[:200],
-        }
 
 
 class HashModule(ModuleBase):

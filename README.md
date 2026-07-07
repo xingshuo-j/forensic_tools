@@ -5,7 +5,7 @@
 [![Dependencies](https://img.shields.io/badge/Dependencies-Zero-brightgreen)]()
 ![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)
 
-**Forensic Toolkit (ftk)** 是一个用**纯 Python 标准库**编写的模块化数字取证工具集，零外部依赖，支持 Linux / macOS / Windows 三大平台。提供 GUI 桌面应用和 CLI 命令行两种操作方式，覆盖 11 个取证场景。
+**Forensic Toolkit (ftk)** 是一个用**纯 Python 标准库**编写的模块化数字取证工具集，零外部依赖，支持 Linux / macOS / Windows 三大平台。提供 GUI 桌面应用和 CLI 命令行两种操作方式，覆盖 11 个取证场景。GUI 界面默认为简体中文，采用深色侧边栏 + 浅色内容区的专业配色方案。
 
 ---
 
@@ -26,7 +26,7 @@
 | 敏感信息搜索 | `ftk hunt secrets <path> [--patterns ...]` | — |
 | 内存分析 | `ftk memory processes / connections / dump <path>` | — |
 
-**核心亮点**: 零外部依赖 · 11 个取证模块 · GUI + CLI 双模式 · 内置证据链 · 16 个单元测试
+**核心亮点**: 零外部依赖 · 11 个取证模块 · GUI + CLI 双模式 · 简体中文界面 · 内置证据链 · 16 个单元测试
 
 ---
 
@@ -50,7 +50,7 @@ cd forensic_toolkit
 python3 bin/ftk --help
 python3 bin/ftk hash compute --algo sha256 /etc/hosts
 
-# GUI 桌面模式
+# GUI 桌面模式（简体中文界面）
 python3 bin/ftk gui
 ```
 
@@ -95,71 +95,65 @@ ftk-gui
 
 ## GUI 使用指南
 
-启动图形化界面：
+### 启动方式
 
 ```bash
-# 通过 bin/ftk（任何目录下均可）
-python3 bin/ftk gui
-
-# 通过 PATH 方式
-ftk gui
-
-# 通过 pip 安装后
-ftk-gui
+python3 bin/ftk gui          # 通过 bin/ftk
+ftk gui                       # 加入 PATH 后
+ftk-gui                       # pip 安装后
 ```
+
+GUI 默认语言为**简体中文**，界面采用**深色侧边栏（#1a1d23）+ 浅色内容区（#f0f2f5）**的双色配比，按钮以蓝色（#2563eb）为强调色，结果表格带有交替行底色提升可读性。
 
 ### 主界面布局
 
 ```
 +---------------------------------------------------+
-|  Forensic Toolkit v0.2.0              [Menu]      |
+|  Forensic Toolkit      v0.2.0       [关于] [退出]  |
 +----------+----------------------------------------+
-|  Sidebar |   Tool Panel                           |
+| 侧边导航  |  工具面板                               |
 |          |                                        |
-|  Dash    |   [Form inputs / parameter area]       |
-|  Disk    |                                        |
-|  FS      |                                        |
-|  Carving |                                        |
-|  Strings |                                        |
-|  Hash    |                                        |
-|  Hunt    |   [Results table with export]          |
-|  Meta    |                                        |
-|  Network |                                        |
-|  Memory  |                                        |
-|  Reg     |                                        |
-|  Recov   |                                        |
+| ⌖ 仪表盘 |   [表单区域：路径选择器、参数控件]      |
+| ⬣ 磁盘   |                                        |
+| ⬡ 文件   |                                        |
+| ✂ 雕刻   |                                        |
+| ≋ 字符串 |                                        |
+| ⊙ 哈希   |                                        |
+| ⊘ 搜索   |   [结果表格：排序/复制/导出]            |
+| ⬤ 元数据 |                                        |
+| ⬢ 网络   |                                        |
+| ⬥ 内存   |                                        |
+| ⬠ 注册表 |                                        |
+| ⭮ 恢复   |                                        |
 +----------+----------------------------------------+
-|  Status: Ready    Platform: linux    v0.2.0       |
+|  就绪     输出: ./ftk_output     平台: linux  v0.2.0 |
 +---------------------------------------------------+
 ```
 
 ### 工作流程
 
-1. **左侧导航栏** — 按功能分类选择工具面板（Dashboard、磁盘、文件系统、雕刻等共 12 个面板）
+1. **左侧导航栏** — 12 个中文标签按钮，点击切换工具面板，当前活跃项以蓝色高亮
 2. **面板表单区** — 每个工具提供路径选择器、参数控件（下拉框、复选框、数值输入）
-3. **Run 按钮** — 点击后任务在后台线程执行，不影响界面响应
-4. **结果表格** — 结构化数据显示，支持：
-   - 列头点击排序
-   - 选中行复制 / 全部复制（JSON 格式，直接入剪贴板）
-   - 导出 JSON / CSV 文件
-5. **状态栏** — 显示当前操作状态和平台信息
+3. **▶ 执行按钮** — 点击后任务在后台线程运行（带动画进度条），界面保持响应
+4. **结果表格** — 结构化数据以交替行底色显示，支持列头排序、选定/全部复制（JSON 入剪贴板）、导出 JSON / CSV
+5. **底部状态栏** — 实时显示操作状态、输出目录、平台信息
 
-### 各面板说明
+### 各面板中文名称
 
-| 面板 | 输入 | 输出 |
-|------|------|------|
-| **Dashboard** | 无 | 平台信息、已注册模块列表、快捷操作 |
-| **Disk** | 设备路径 | 块设备列表、设备详情（型号/序列号/容量） |
-| **Filesystem** | 文件/目录路径、扫描深度、bodyfile 开关 | stat 元数据、MAC 时间线 |
-| **Carving** | 源文件/设备、输出目录、文件类型、提取开关 | 发现的签名列表，可提取到目录 |
-| **Strings** | 文件路径、最小长度、最大结果数 | ASCII/UTF-16LE 字符串及偏移量 |
-| **Hash** | 文件路径、算法选择 | 文件哈希值 |
-| **Hunt** | 文件路径、模式选择 | 匹配的敏感信息（API 密钥/邮箱/信用卡等） |
-| **Metadata** | 文件路径 | EXIF / Office / PDF 元数据 |
-| **Network** | PCAP 文件 | 连接时间线 / DNS 查询 / 统计（三标签页） |
-| **Memory** | 模式选择 / dump 文件 | 进程列表 / 网络连接 / 内存扫描结果 |
-| **Registry** | Hive 文件 | 键值树及名称、类型、数据 |
-| **Recovery** | 设备路径、文件系统类型 | 已删除文件记录列表 |
+| 面板标识 | 中文名称 | 输入 | 输出 |
+|----------|---------|------|------|
+| Dashboard | **仪表盘** | 无 | 平台信息、已注册模块列表、快捷操作 |
+| Disk | **磁盘取证** | 设备路径 | 块设备列表、设备详情（型号/序列号/容量） |
+| Filesystem | **文件系统** | 文件/目录路径、扫描深度 | stat 元数据、MAC 时间线 |
+| Carving | **文件雕刻** | 源文件/设备、输出目录、文件类型 | 发现的签名列表，可提取到目录 |
+| Strings | **字符串提取** | 文件路径、最小长度、最大结果数 | ASCII/UTF-16LE 字符串及偏移量 |
+| Hash | **哈希校验** | 文件路径、算法选择 | 文件哈希值 |
+| Hunt | **敏感搜索** | 文件路径、模式选择 | 匹配的敏感信息（API 密钥/邮箱/信用卡等） |
+| Metadata | **元数据提取** | 文件路径 | EXIF / Office / PDF 元数据 |
+| Network | **网络取证** | PCAP 文件 | 连接时间线 / DNS 查询 / 统计（三标签页） |
+| Memory | **内存分析** | 模式选择 / dump 文件 | 进程列表 / 网络连接 / 内存扫描结果 |
+| Registry | **注册表解析** | Hive 文件 | 键值树及名称、类型、数据 |
+| Recovery | **数据恢复** | 设备路径 + 文件系统类型 | 已删除文件记录列表 |
 
 ---
 
@@ -168,23 +162,12 @@ ftk-gui
 ### 快速上手
 
 ```bash
-# 查看所有命令
-ftk --help
-
-# 列出已注册模块
-ftk list-modules
-
-# 示例：计算文件哈希
-ftk hash compute --algo all /etc/hosts
-
-# 示例：提取可打印字符串
-ftk strings dump /path/to/file --min-len 6 --max-results 1000
-
-# 示例：扫描磁盘镜像中的文件签名
-ftk carving scan /path/to/disk.img --types jpeg,pdf --extract --output ./carved
-
-# JSON 格式输出（方便脚本处理）
-ftk --output-format json disk list
+ftk --help                                    # 查看所有命令
+ftk list-modules                              # 列出已注册模块
+ftk hash compute --algo all /etc/hosts        # 计算文件哈希
+ftk strings dump /path/to/file --min-len 6    # 提取字符串
+ftk carving scan disk.img --types jpeg,pdf --extract --output ./carved
+ftk --output-format json disk list            # JSON 格式输出
 ```
 
 ### 全局选项
@@ -194,100 +177,53 @@ ftk --output-format json disk list
 | `--output-format` | `table` | 输出格式：`table` / `json` / `csv` |
 | `-o, --output-dir` | `./ftk_output` | 证据链日志和输出文件目录 |
 | `-v, --verbose` | 关闭 | 输出详细 DEBUG 日志 |
-| `--version` | — | 打印版本号 |
 
 ### 命令参考
 
-#### 磁盘取证
-
 ```bash
-ftk disk list                                 # 枚举所有块设备
-ftk disk info /dev/sda                        # 查看设备详情
-```
+# 磁盘取证
+ftk disk list                            # 枚举所有块设备
+ftk disk info /dev/sda                   # 查看设备详情
 
-#### 文件系统分析
+# 文件系统分析
+ftk filesystem info /etc/passwd          # stat 元数据
+ftk filesystem timeline /var/log --depth 5 --bodyfile
 
-```bash
-ftk filesystem info /etc/passwd               # stat 元数据
-ftk filesystem timeline /var/log --depth 5    # MAC 时间线
-ftk filesystem timeline /var/log --bodyfile   # TSK bodyfile 格式
-```
-
-#### 文件雕刻
-
-```bash
-ftk carving scan disk.img                     # 扫描全部类型 (dry-run)
+# 文件雕刻（支持 JPEG、PDF、ZIP、PNG、GIF、ELF 等 11 种签名）
 ftk carving scan disk.img --types jpeg,pdf --extract --output ./carved
-# 支持: JPEG, PDF, ZIP, PNG, GIF, ELF, RIFF, XML, HTML, BMP
-```
 
-#### 元数据提取
+# 元数据提取（EXIF / Office / PDF）
+ftk metadata extract photo.jpg
 
-```bash
-ftk metadata extract photo.jpg                # EXIF (相机/GPS)
-ftk metadata extract doc.docx                 # Office 文档属性
-ftk metadata extract report.pdf               # PDF /Info 字典
-```
+# 网络取证
+ftk network analyze capture.pcap
 
-#### 网络取证
+# 删除文件恢复（需要 root）
+sudo ftk recovery scan /dev/sda1 --fs-type ntfs
 
-```bash
-ftk network analyze capture.pcap              # 连接时间线 + DNS 查询
-```
+# Windows 注册表解析
+ftk registry dump /mnt/SOFTWARE
 
-#### 删除文件恢复
+# 字符串提取（流式，无文件大小限制）
+ftk strings dump /path/to/file --min-len 6
+cat disk.img | ftk strings dump -
 
-```bash
-sudo ftk recovery scan /dev/sda1              # 自动检测 FS
-sudo ftk recovery scan /dev/sdc1 --fs-type ext4
-sudo ftk recovery scan /dev/disk0s1 --fs-type apfs
-# 支持: ntfs ($MFT), ext4 (inode), fat (0xE5), apfs (NXSB + B-tree)
-```
+# 哈希校验
+ftk hash compute --algo all /path/to/file
 
-#### Registry 解析
+# 敏感信息搜索
+ftk hunt secrets /path/to/file --patterns email
 
-```bash
-ftk registry dump /mnt/SOFTWARE               # 离线解析 Hive 文件
-ftk registry dump /mnt/NTUSER.DAT
-```
-
-#### 字符串提取
-
-```bash
-ftk strings dump /path/to/file --min-len 6    # 流式, 无大小限制
-cat disk.img | ftk strings dump -             # 从管道读取
-```
-
-#### 哈希校验
-
-```bash
-ftk hash compute /path/to/file                # SHA-256
-ftk hash compute --algo md5 /path/to/file     # MD5
-ftk hash compute --algo all /path/to/file     # MD5 + SHA-1 + SHA-256
-```
-
-#### 敏感信息搜索
-
-```bash
-ftk hunt secrets /path/to/file                           # 全部模式
-ftk hunt secrets --patterns email /path/to/file          # 仅邮箱
-ftk hunt secrets --patterns api_key /path/to/file        # 仅 API 密钥
-# 模式: api_key / email / credit_card / ip_address / bitcoin / ethereum / private_key
-```
-
-#### 内存分析
-
-```bash
-ftk memory processes                           # 进程枚举 (Linux)
-ftk memory connections                         # 网络连接 (Linux)
-ftk memory dump /path/to/memdump.bin           # 内存转储分析
+# 内存分析（Linux）
+ftk memory processes
+ftk memory dump /path/to/memdump.bin
 ```
 
 ---
 
 ## 输出格式
 
-所有命令共享统一输出格式，通过 `--output-format` 控制：
+所有命令共享统一输出格式：
 
 ```bash
 ftk disk list                          # table（默认终端表格）
@@ -302,7 +238,8 @@ ftk --output-format csv disk list      # CSV（Excel / Splunk 导入）
 ```
 +-----------------------------------------------------------+
 |  GUI 层  (Tkinter, 零依赖)                                |
-|  12 个面板 · 后台线程 · 结果表格 · 导出 JSON/CSV          |
+|  12 个工具面板 · 后台线程 · 深色侧栏 · 中文界面            |
+|  结果表格：排序/复制/导出 JSON-CSV · 交替行底色            |
 +-----------------------------------------------------------+
 |  CLI 层  (argparse, 零外部依赖)                           |
 |  17 个子命令 · 全局 --output-format / -o / -v            |
@@ -313,21 +250,10 @@ ftk --output-format csv disk list      # CSV（Excel / Splunk 导入）
 |  timeline | disk (分区表)                                  |
 +-----------------------------------------------------------+
 |  核心层  (7 个组件, 纯标准库)                              |
-|  platform.py    平台抽象 (Linux/macOS/Windows)            |
-|  evidence.py    证据链 (Chain of Custody, JSON Lines)    |
-|  hashing.py     取证哈希 (MD5/SHA-1/SHA-256)             |
-|  formatters.py  统一输出 (table/json/csv)                 |
-|  module_base.py 模块注册与发现 (ModuleBase + Registry)    |
-|  logging.py     结构化取证日志                             |
-|  types.py       通用类型 (BlockDevice, ForensicError)     |
+|  platform.py    evidence.py    hashing.py                 |
+|  formatters.py  module_base.py logging.py  types.py       |
 +-----------------------------------------------------------+
 ```
-
-**设计原则**:
-- 所有 OS 差异集中在 `core/platform.py`，上层不依赖 `os.name` / `sys.platform`
-- 每个模块继承 `ModuleBase`，通过 `ModuleRegistry` 自注册，CLI 和 GUI 均可自动发现
-- 每次操作可写入 `EvidenceSession`，生成 JSON Lines 日志用于审计追溯
-- GUI 中耗时操作自动在后台线程执行，界面保持响应
 
 ---
 
@@ -337,29 +263,22 @@ ftk --output-format csv disk list      # CSV（Excel / Splunk 导入）
 from forensic_toolkit.core.hashing import Hasher
 from forensic_toolkit.core.evidence import EvidenceSession
 from forensic_toolkit.core.platform import Platform
+from forensic_toolkit.core.module_base import ModuleRegistry
+import forensic_toolkit.modules.strings
 
 # 计算哈希
 h = Hasher.file_hash("/path/to/file", "sha256")
-all_hashes = Hasher.all_hashes("/path/to/file")
-# -> {"md5": "...", "sha-1": "...", "sha-256": "..."}
 
 # 证据链日志
 with EvidenceSession("./output", case_name="case-001") as session:
-    session.log("hash.compute", source="/path/to/file",
-                source_hash=h, notes="计算文件哈希")
+    session.log("hash.compute", source="/path/to/file", source_hash=h)
 
 # 调用取证模块
-from forensic_toolkit.core.module_base import ModuleRegistry
-# 需要先导入模块触发注册
-import forensic_toolkit.modules.strings
 mod = ModuleRegistry.get("strings")(path="/path/to/file", min_length=6)
 result = mod.run()
-print(f"找到 {result['strings_found']} 个字符串")
 
 # 平台信息
-print(f"系统: {Platform.info.system}")          # linux | darwin | windows
-print(f"管理员: {Platform.info.is_admin}")
-
+print(f"系统: {Platform.info.system}")
 for dev in Platform.list_block_devices():
     print(f"  {dev.path}: {dev.model}")
 ```
@@ -371,7 +290,6 @@ for dev in Platform.list_block_devices():
 | 功能 | Linux | macOS | Windows |
 |------|-------|-------|---------|
 | 块设备枚举 | `/sys/block` | `diskutil` | `\\.\PhysicalDriveN` |
-| 权限检测 | `geteuid()` | `geteuid()` | `IsUserAnAdmin()` |
 | 文件雕刻 | ✅ | ✅ | ✅ |
 | 哈希 / 字符串 | ✅ | ✅ | ✅ |
 | MAC 时间线 | ✅ | ✅ | ✅ |
@@ -400,7 +318,7 @@ python3 -m unittest tests.test_core -v
 1. 在 `modules/` 下创建 `your_module/__init__.py`
 2. 继承 `ModuleBase`，设置 `ModuleMeta`，实现 `run()`
 3. 调用 `ModuleRegistry.register(YourModule)`
-4. CLI 和 GUI 均会自动发现，无需额外注册
+4. CLI 和 GUI 均会自动发现
 
 ```python
 from forensic_toolkit.core.module_base import ModuleBase, ModuleMeta, ModuleRegistry
@@ -415,8 +333,8 @@ ModuleRegistry.register(YourModule)
 ### 添加 GUI 面板
 
 1. 在 `forensic_toolkit/gui/panels.py` 中新建 `BasePanel` 子类
-2. 调用 `register_panel(YourPanel)`
-3. 导航栏和面板切换自动生效
+2. 设置 `TITLE` 类变量（英文标识），在 `PANEL_NAMES` 中映射中文名称和图标
+3. 调用 `register_panel(YourPanel)`
 
 ---
 
@@ -428,10 +346,10 @@ forensic_toolkit/
 ├── pyproject.toml                 ← 项目配置 + 入口点
 ├── forensic_toolkit/
 │   ├── cli/main.py               ← CLI (argparse)
-│   ├── gui/                      ← GUI (Tkinter)
-│   │   ├── app.py                ← 主窗口 + 导航
-│   │   ├── panels.py             ← 12 个工具面板
-│   │   └── widgets.py            ← 可复用控件
+│   ├── gui/                      ← GUI (Tkinter, 中文)
+│   │   ├── app.py                ← 主窗口 + 深色侧栏导航
+│   │   ├── panels.py             ← 12 个中文面板
+│   │   └── widgets.py            ← 可复用控件（结果表格等）
 │   ├── core/                     ← 核心层 (7 组件)
 │   ├── modules/                  ← 取证模块 (11 个)
 │   └── utils/                    ← 工具函数
