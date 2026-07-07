@@ -466,8 +466,8 @@ class NetworkPanel(BasePanel):
 
     def build_ui(self) -> None:
         SectionFrame(self, title="网络取证分析").pack(fill=tk.X, padx=14, pady=6)
-        self._picker = FilePicker(self, label="PCAP 文件:", default="",
-                                  filetypes=[("PCAP", "*.pcap *.cap *.dump"), ("所有文件", "*")])
+        self._picker = FilePicker(self, label="抓包文件:", default="",
+                                  filetypes=[("PCAP/PCAPNG", "*.pcap *.pcapng *.cap *.dump"), ("所有文件", "*")])
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         RunButton(self, text="分析", command=self._run).pack(padx=14, pady=5)
 
@@ -485,7 +485,7 @@ class NetworkPanel(BasePanel):
     def _run(self) -> None:
         path = self._picker.get()
         if not path:
-            messagebox.showwarning("输入", "请选择 PCAP 文件。")
+            messagebox.showwarning("输入", "请选择抓包文件。")
             return
         def work():
             _import_module("forensic_toolkit.modules.network")

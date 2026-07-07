@@ -222,9 +222,9 @@ def build_parser():
     _sp(mds, "extract", run_metadata, help="  提取文件元数据").add_argument("path")
 
     # network
-    nw = _sp(sub, "network", None, help="  网络取证")
+    nw = _sp(sub, "network", None, help="  网络取证 (PCAP/PCAPNG)")
     nws = nw.add_subparsers(dest="net_cmd", metavar="")
-    _sp(nws, "analyze", run_network, help="  PCAP 分析").add_argument("pcap")
+    _sp(nws, "analyze", run_network, help="  PCAP/PCAPNG 分析").add_argument("pcap", help="抓包文件 (*.pcap / *.pcapng)")
 
     # recovery
     rc = _sp(sub, "recovery", None, help="  已删除文件恢复")
