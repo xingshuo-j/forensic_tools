@@ -6,6 +6,7 @@ All labels in Simplified Chinese.
 
 from __future__ import annotations
 import sys
+from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Any, Callable
@@ -167,11 +168,20 @@ class DiskPanel(BasePanel):
         if not path:
             messagebox.showwarning("输入", "请输入设备路径。")
             return
+        p = Path(path)
         def work():
             for d in Platform.list_block_devices():
                 if d.path == path:
                     return {"路径": d.path, "型号": d.model, "序列号": d.serial,
-                            "大小": _fmt(d.size_bytes), "块大小": d.block_size}
+                            "大小": _fmt(d.size_bytes), "块大小": d.block_size, "来源": "块设备"}
+            if p.is_file():
+                _import_module("forensic_toolkit.modules.disk")
+                from forensic_toolkit.modules.disk import DiskModule
+                result = DiskModule(path=str(p)).run()
+                if isinstance(result, dict):
+                    result["文件大小"] = _fmt(p.stat().st_size)
+                    result["来源"] = "磁盘映像"
+                return result
             return {"error": f"未找到设备: {path}"}
         def done(result):
             self._result.load(result)

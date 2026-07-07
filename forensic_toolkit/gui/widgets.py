@@ -204,7 +204,7 @@ class FilePicker(ttk.Frame):
         lbl.grid(row=0, column=0, padx=(0, 6), sticky="w")
         entry = ttk.Entry(self, textvariable=self._var, font=("", 10))
         entry.grid(row=0, column=1, sticky="ew", padx=(0, 6))
-        ttk.Button(self, text="浏览...", command=self._browse, padding=(8, 2)).grid(row=0, column=2, sticky="e")
+        ttk.Button(self, text="浏览...", command=self._browse).grid(row=0, column=2, sticky="e")
 
     def get(self) -> str:
         return self._var.get().strip()
@@ -216,14 +216,35 @@ class FilePicker(ttk.Frame):
         self._var.trace_add("write", lambda *_: cb())
 
     def _browse(self) -> None:
-        if self._browse_mode == "dir":
-            p = filedialog.askdirectory(title="选择目录")
-        elif self._browse_mode == "save":
-            p = filedialog.asksaveasfilename(title="保存为", filetypes=self._filetypes)
-        else:
-            p = filedialog.askopenfilename(title="选择文件", filetypes=self._filetypes)
-        if p:
-            self._var.set(p)
+        try:
+            import os
+            parent = self.winfo_toplevel()
+            current = self.get()
+            if current and os.path.exists(current):
+                if os.path.isdir(current):
+                    initialdir = current
+                else:
+                    initialdir = os.path.dirname(current) or os.path.expanduser("~")
+            else:
+                initialdir = os.path.expanduser("~")
+            if not os.path.isdir(initialdir):
+                initialdir = "/"
+            self.update_idletasks()
+            if self._browse_mode == "dir":
+                p = filedialog.askdirectory(title="选择目录", parent=parent,
+                                            initialdir=initialdir)
+            elif self._browse_mode == "save":
+                p = filedialog.asksaveasfilename(
+                    title="保存为", filetypes=self._filetypes, parent=parent,
+                    initialdir=initialdir)
+            else:
+                p = filedialog.askopenfilename(
+                    title="选择文件", filetypes=self._filetypes, parent=parent,
+                    initialdir=initialdir)
+            if p:
+                self._var.set(p)
+        except Exception as e:
+            messagebox.showerror("对话框错误", f"无法打开文件选择对话框: {e}")
 
 class DirPicker(FilePicker):
     """Directory picker (convenience)."""

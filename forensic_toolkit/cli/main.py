@@ -77,10 +77,26 @@ def run_disk_info(args):
     for d in Platform.list_block_devices():
         if d.path == args.path:
             _emit(args, {"path": d.path, "model": d.model, "serial": d.serial,
-                         "size": _fmt(d.size_bytes), "block_size": d.block_size})
+                         "size": d.size_bytes, "size_human": _fmt(d.size_bytes),
+                         "block_size": d.block_size, "source": "block_device"})
             return
+    p = Path(args.path)
+    if p.is_file():
+        from forensic_toolkit.modules.disk import DiskModule
+        result = DiskModule(path=str(p)).run()
+        if isinstance(result, dict):
+            result["source"] = "disk_image"
+            result["file_size"] = p.stat().st_size
+            result["file_size_human"] = _fmt(p.stat().st_size)
+        _emit(args, result)
+        return
     print(f"设备未找到: {args.path}", file=sys.stderr)
     sys.exit(1)
+
+
+def run_disk_analyze(args):
+    from forensic_toolkit.modules.disk import DiskModule
+    _emit(args, DiskModule(path=args.path).run())
 
 
 def run_fs_info(args):
@@ -177,6 +193,8 @@ def build_parser():
     dks = dk.add_subparsers(dest="disk_cmd", metavar="")
     _sp(dks, "list", run_disk_list, help="  枚举块设备")
     dp = _sp(dks, "info", run_disk_info, help="  设备详情")
+    dp.add_argument("path")
+    dp = _sp(dks, "analyze", run_disk_analyze, help="  分析磁盘映像(MBR/GPT)")
     dp.add_argument("path")
 
     # filesystem

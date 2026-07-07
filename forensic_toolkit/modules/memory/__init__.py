@@ -128,6 +128,8 @@ class MemoryModule(ModuleBase):
 
     # ── 内存转储分析 ─────────────────────────────────
 
+    _DUMP_MAX_READ = 500 * 1024 * 1024           # 500 MiB 转储分析上限
+
     def _analyze_dump(self) -> dict:
         """对内存转储文件进行基本分析。"""
         if not self._target:
@@ -138,12 +140,19 @@ class MemoryModule(ModuleBase):
             return {"error": f"文件不存在: {path}"}
 
         size = path.stat().st_size
+        if size > self._DUMP_MAX_READ:
+            return {
+                "error": f"文件过大 ({size / (1024*1024):.0f} MiB)，超出内存分析上限 ({self._DUMP_MAX_READ // (1024*1024)} MiB)。\n建议使用 Volatility 3: pip install volatility3",
+                "file": str(path.resolve()),
+                "size": size,
+            }
+
         found: dict = {"file": str(path.resolve()), "size": size, "hints": []}
 
         try:
             data = path.read_bytes()
         except MemoryError:
-            return {"error": "文件过大，请使用 Volatility 3 分析"}
+            return {"error": "内存不足，请使用 Volatility 3 分析"}
 
         # 搜索进程结构特征
         # Linux task_struct 特征: 查找常见内核符号

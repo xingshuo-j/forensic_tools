@@ -37,7 +37,7 @@ class DiskModule(ModuleBase):
         result = {"device": str(self._path), "partitions": []}
 
         try:
-            data = self._path.read_bytes(1024)
+            data = open(self._path, "rb").read(1024)
 
             # MBR 检测
             if data[510:512] == b"\x55\xAA":

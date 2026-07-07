@@ -202,6 +202,15 @@ class MetadataModule(ModuleBase):
         ext = path.suffix.lower()
         metadata: dict = {"file": str(path.resolve()), "format": "unknown", "metadata": {}}
 
+        _META_MAX_READ = 200 * 1024 * 1024           # 200 MiB 元数据提取上限
+        size = path.stat().st_size
+        if size > _META_MAX_READ:
+            return {
+                "error": f"文件过大 ({size / (1024*1024):.0f} MiB)，超出元数据提取上限 ({_META_MAX_READ // (1024*1024)} MiB)。",
+                "file": str(path.resolve()),
+                "size": size,
+            }
+
         try:
             if ext in (".jpg", ".jpeg", ".tif", ".tiff"):
                 metadata["format"] = "EXIF (JPEG/TIFF)"
@@ -214,10 +223,10 @@ class MetadataModule(ModuleBase):
                 metadata["metadata"] = _parse_pdf(path)
             else:
                 # 尝试魔数猜测
-                head = path.read_bytes(512)
+                with open(path, "rb") as _f: head = _f.read(512)
                 if head[:3] == b"\xff\xd8\xff":
                     metadata["format"] = "JPEG (魔数检测)"
-                    metadata["metadata"] = _parse_exif(path.read_bytes(64 * 1024))
+                    with open(path, "rb") as _f: metadata["metadata"] = _parse_exif(_f.read(64 * 1024))
                 elif head[:4] == b"%PDF":
                     metadata["format"] = "PDF (魔数检测)"
                     metadata["metadata"] = _parse_pdf(path)
@@ -225,7 +234,10 @@ class MetadataModule(ModuleBase):
                     metadata["format"] = "Office ZIP (魔数检测)"
                     metadata["metadata"] = _parse_office_xml(path)
                 else:
-                    metadata["note"] = f"不支持的文件类型: {ext}"
+                    metadata["note"] = (f"不支持的文件类型: {ext}。"
+                                    "可分析的格式: JPEG/TIFF (EXIF 相机/GPS 信息), "
+                                    "PDF (/Info 作者/创建时间), "
+                                    "Office Open XML (.docx/.xlsx/.pptx) 作者/修改记录")
         except Exception as e:
             return {"error": str(e), "file": str(path.resolve())}
 

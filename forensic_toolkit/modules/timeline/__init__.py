@@ -23,7 +23,7 @@ class TimelineModule(ModuleBase):
         name="timeline",
         description="生成文件系统 MAC 时间线 (支持 bodyfile 格式)",
         author="Forensic Toolkit",
-        version="0.2.0",
+        version="0.3.0",
     )
 
     def __init__(self, **kwargs) -> None:
@@ -37,46 +37,48 @@ class TimelineModule(ModuleBase):
         if not path.exists():
             return {"error": f"路径不存在: {path}"}
 
-        entries = []
-        self._walk(path, 0, entries)
+        if path.is_file():
+            entries = [self._stat_entry(path)]
+        elif path.is_dir():
+            entries = []
+            self._walk(path, 0, entries)
+        else:
+            return {"error": f"不支持的路径类型: {path}"}
 
         if self._bodyfile:
             return self._to_bodyfile(entries)
         return sorted(entries, key=lambda x: x.get("mtime", 0), reverse=True)
+
+    @staticmethod
+    def _stat_entry(p: Path) -> dict:
+        try:
+            st = p.stat()
+            try:
+                crtime = st.st_birthtime
+            except AttributeError:
+                crtime = st.st_ctime
+            return {
+                "path": str(p), "name": p.name,
+                "type": "dir" if p.is_dir() else "file",
+                "size": st.st_size, "inode": st.st_ino,
+                "mode": stat.filemode(st.st_mode),
+                "uid": st.st_uid, "gid": st.st_gid,
+                "mtime": st.st_mtime, "atime": st.st_atime,
+                "ctime": st.st_ctime, "crtime": crtime,
+            }
+        except (PermissionError, OSError):
+            return {"path": str(p), "name": p.name, "type": "?", "size": 0,
+                    "inode": 0, "mode": "??????????", "uid": 0, "gid": 0,
+                    "mtime": 0, "atime": 0, "ctime": 0, "crtime": 0,
+                    "error": "access_denied"}
 
     def _walk(self, p: Path, depth: int, acc: list) -> None:
         if depth > self._depth:
             return
         try:
             for child in p.iterdir():
-                try:
-                    st = child.stat()
-                    try:
-                        crtime = st.st_birthtime  # macOS/BSD
-                    except AttributeError:
-                        crtime = st.st_ctime
-                    acc.append({
-                        "path": str(child),
-                        "name": child.name,
-                        "type": "dir" if child.is_dir() else "file",
-                        "size": st.st_size,
-                        "inode": st.st_ino,
-                        "mode": stat.filemode(st.st_mode),
-                        "uid": st.st_uid,
-                        "gid": st.st_gid,
-                        "mtime": st.st_mtime,
-                        "atime": st.st_atime,
-                        "ctime": st.st_ctime,
-                        "crtime": crtime,
-                    })
-                except (PermissionError, OSError):
-                    acc.append({
-                        "path": str(child), "name": child.name,
-                        "type": "?", "size": 0, "inode": 0,
-                        "mode": "??????????", "uid": 0, "gid": 0,
-                        "mtime": 0, "atime": 0, "ctime": 0, "crtime": 0,
-                        "error": "access_denied",
-                    })
+                entry = self._stat_entry(child)
+                acc.append(entry)
                 if child.is_dir() and depth < self._depth:
                     self._walk(child, depth + 1, acc)
         except PermissionError:

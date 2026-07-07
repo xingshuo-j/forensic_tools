@@ -237,9 +237,18 @@ class RegistryModule(ModuleBase):
         super().__init__(**kwargs)
         self._path = Path(self.params["path"])
 
+    _MAX_HIVE_SIZE = 500 * 1024 * 1024            # 500 MiB hive 上限
+
     def run(self) -> Any:
         if not self._path.exists():
             return {"error": f"文件不存在: {self._path}"}
+        size = self._path.stat().st_size
+        if size > self._MAX_HIVE_SIZE:
+            return {
+                "error": f"Hive 文件过大 ({size / (1024*1024):.0f} MiB)，超出解析上限 ({self._MAX_HIVE_SIZE // (1024*1024)} MiB)。",
+                "file": str(self._path.resolve()),
+                "size": size,
+            }
         return _parse_hive(self._path)
 
 
