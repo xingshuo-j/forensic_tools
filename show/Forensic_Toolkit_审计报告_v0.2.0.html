@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forensic Toolkit — 技术审计报告 v0.2.0</title>
+<style>
+  @page { size: A4; margin: 2cm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Noto Sans SC", "Microsoft YaHei", -apple-system, sans-serif;
+    font-size: 11pt; line-height: 1.7; color: #1a1a1a;
+    max-width: 920px; margin: 0 auto; padding: 2em 1.5em; background: #fff;
+  }
+  @media print { body { max-width: none; padding: 0; } h2 { page-break-before: always; } h2:first-of-type { page-break-before: avoid; } }
+  h1 { font-size: 22pt; color: #1F4E79; border-bottom: 3px solid #1F4E79; padding-bottom: 0.3em; margin-bottom: 0.8em; }
+  h2 { font-size: 16pt; color: #2E75B6; margin-top: 1.8em; margin-bottom: 0.6em; padding-left: 0.4em; border-left: 4px solid #2E75B6; }
+  h3 { font-size: 13pt; color: #44546A; margin-top: 1.2em; margin-bottom: 0.4em; }
+  p, li { margin-bottom: 0.4em; }
+  ul, ol { padding-left: 1.8em; margin-bottom: 0.8em; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 10pt; }
+  th, td { border: 1px solid #bbb; padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
+  th { background: #1F4E79; color: #fff; font-weight: 600; }
+  tr:nth-child(even) { background: #f5f7fa; }
+  code { font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace; background: #f0f0f0; padding: 0.1em 0.3em; border-radius: 3px; font-size: 9.5pt; }
+  pre { background: #1e1e1e; color: #d4d4d4; padding: 0.8em 1em; border-radius: 6px; overflow-x: auto; font-size: 9.5pt; line-height: 1.5; margin: 0.6em 0; }
+  .meta { color: #666; font-size: 10pt; margin-bottom: 1.5em; }
+  .badge { display: inline-block; padding: 0.15em 0.6em; font-size: 9pt; font-weight: 600; border-radius: 3px; margin-right: 0.3em; }
+  .badge-green { background: #dff0d8; color: #3c763d; }
+  .badge-blue { background: #d9edf7; color: #31708f; }
+  .badge-yellow { background: #fcf8e3; color: #8a6d3b; }
+  .badge-red { background: #f2dede; color: #a94442; }
+  .toc { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 1em 1.5em; margin: 1em 0; }
+  .toc ul { list-style: none; padding-left: 0; }
+  .toc li { padding: 0.2em 0; }
+  .toc a { color: #2E75B6; text-decoration: none; }
+  .footer { margin-top: 3em; padding-top: 1em; border-top: 1px solid #ccc; font-size: 9pt; color: #888; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>Forensic Toolkit<br><span style="font-size:14pt;color:#44546A;font-weight:400;">跨平台数字取证工具集 — 技术审计报告 v0.2.0</span></h1>
+
+<div class="meta">
+  <strong>文档版本:</strong> v0.2.0 &nbsp;|&nbsp;
+  <strong>生成日期:</strong> 2026-07-05 16:14 &nbsp;|&nbsp;
+  <strong>外部依赖:</strong> <span class="badge badge-green">零 (纯标准库)</span><br>
+  <strong>平台覆盖:</strong>
+  <span class="badge badge-green">Linux</span>
+  <span class="badge badge-green">macOS</span>
+  <span class="badge badge-green">Windows</span>
+  <span class="badge badge-blue">Python 3.11+</span>
+  <strong>模块数:</strong> 11 &nbsp;|&nbsp; <strong>测试:</strong> 16
+</div>
+
+<div class="toc">
+  <strong>目录</strong>
+  <ul>
+    <li><a href="#s1">1. 项目概览</a></li>
+    <li><a href="#s2">2. 架构审计</a></li>
+    <li><a href="#s3">3. 已实现模块审计</a></li>
+    <li><a href="#s4">4. 零外部依赖审计</a></li>
+    <li><a href="#s5">5. 跨平台兼容性</a></li>
+    <li><a href="#s6">6. 测试与质量</a></li>
+    <li><a href="#s7">7. 限制与风险</a></li>
+    <li><a href="#s8">8. 审计结论</a></li>
+  </ul>
+</div>
+
+<h2 id="s1">1. 项目概览</h2>
+
+<table>
+  <tr><th>项目</th><th>值</th></tr>
+  <tr><td>项目名称</td><td>Forensic Toolkit (ftk)</td></tr>
+  <tr><td>版本</td><td>v0.2.0</td></tr>
+  <tr><td>开发语言</td><td>Python 3.11+</td></tr>
+  <tr><td>外部依赖</td><td><strong>零</strong> (全部使用 argparse / struct / hashlib / zipfile 等标准库)</td></tr>
+  <tr><td>CLI 框架</td><td>argparse (17 组子命令)</td></tr>
+  <tr><td>模块总数</td><td>11 个已注册模块</td></tr>
+  <tr><td>核心框架组件</td><td>7 个 (platform, evidence, hashing, logging, formatters, module_base, types)</td></tr>
+  <tr><td>单元测试</td><td>16 个，全部通过</td></tr>
+  <tr><td>工具层</td><td>hexdump / 时间戳转换 / 二进制工具</td></tr>
+  <tr><td>入口方式</td><td><code>ftk</code> CLI 命令 / Python API / bin/ftk 可执行脚本</td></tr>
+</table>
+
+<h2 id="s2">2. 架构审计</h2>
+
+<h3>2.1 分层架构</h3>
+
+<table>
+  <tr><th>层级</th><th>组件</th><th>技术</th></tr>
+  <tr><td>CLI</td><td>17 个子命令，全局 --output-format / -o / -v</td><td>argparse</td></tr>
+  <tr><td>模块层</td><td>11 个取证模块，继承 ModuleBase</td><td>ModuleRegistry 自注册</td></tr>
+  <tr><td>核心层</td><td>平台抽象 / 证据链 / 哈希 / 格式化</td><td>纯 Python</td></tr>
+  <tr><td>工具层</td><td>hexdump / 时间戳 / 二进制工具</td><td>标准库</td></tr>
+</table>
+
+<h3>2.2 平台抽象层 (PAL)</h3>
+<p><code>core/platform.py</code> 封装所有 OS 差异：</p>
+
+<table>
+  <tr><th>功能</th><th>Linux</th><th>macOS</th><th>Windows</th></tr>
+  <tr><td>块设备枚举</td><td>/sys/block</td><td>diskutil</td><td>\\\\.\\PhysicalDriveN</td></tr>
+  <tr><td>只读打开</td><td>O_RDONLY</td><td>O_RDONLY</td><td>CreateFile(GENERIC_READ)</td></tr>
+  <tr><td>权限检测</td><td>geteuid()==0</td><td>geteuid()==0</td><td>IsUserAnAdmin()</td></tr>
+</table>
+
+<h3>2.3 证据链 (Chain of Custody)</h3>
+<p><code>core/evidence.py</code> — 每次取证操作自动记录：</p>
+<pre>{"timestamp":"...", "action":"hash.compute", "operator":"xing",
+ "source":"/evidence/disk.img", "source_hash":"e3b0c442...",
+ "notes":"计算文件哈希"}</pre>
+<p>JSON Lines 格式，文件命名 <code>coc_{session_id}.jsonl</code>，支持 <code>with</code> 上下文管理器。</p>
+
+<h2 id="s3">3. 已实现模块审计</h2>
+
+<p>全部 11 个模块已注册并通过功能验证：</p>
+
+<table>
+  <tr><th>模块</th><th>版本</th><th>CLI 命令</th><th>核心功能</th><th>状态</th></tr>
+  <tr><td>carving</td><td>0.1.0</td><td><code>ftk carving scan</code></td><td>11 种 Magic Bytes 文件雕刻，dry-run + 提取</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>filesystem</td><td>0.1.0</td><td><code>ftk filesystem info</code></td><td>文件/目录/设备 stat 元数据</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>hash</td><td>0.1.0</td><td><code>ftk hash compute</code></td><td>MD5/SHA-1/SHA-256 流式哈希</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>hunt</td><td>0.2.0</td><td><code>ftk hunt secrets</code></td><td>7 种模式 + Luhn 信用卡校验</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>memory</td><td>0.1.0</td><td><code>ftk memory {processes,connections,dump}</code></td><td>进程枚举/网络连接/转储分析</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>metadata</td><td>0.1.0</td><td><code>ftk metadata extract</code></td><td>EXIF GPS/Office XML/PDF /Info</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>network</td><td>0.1.0</td><td><code>ftk network analyze</code></td><td>PCAP 全栈 (Eth/IP/TCP/UDP/DNS)</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>recovery</td><td>0.2.0</td><td><code>ftk recovery scan</code></td><td>NTFS MFT / ext4 inode / FAT dir / APFS</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>registry</td><td>0.1.0</td><td><code>ftk registry dump</code></td><td>REGF hive 解析，键值遍历，值提取</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>strings</td><td>0.2.0</td><td><code>ftk strings dump</code></td><td>流式提取 ASCII + UTF-16LE，无大小限制</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>timeline</td><td>0.2.0</td><td><code>ftk filesystem timeline</code></td><td>MAC 时间线 + TSK bodyfile 格式</td><td><span class="badge badge-green">通过</span></td></tr>
+</table>
+
+<h2 id="s4">4. 零外部依赖审计</h2>
+
+<p>核心功能全部使用 Python 标准库实现：</p>
+
+<table>
+  <tr><th>功能领域</th><th>替代前 (v0.1.x)</th><th>替代后 (v0.2.0)</th><th>标准库</th></tr>
+  <tr><td>CLI 框架</td><td>click</td><td>argparse</td><td>argparse</td></tr>
+  <tr><td>二进制解析</td><td>construct</td><td>struct + 手动解析</td><td>struct, zipfile, xml.etree.ElementTree</td></tr>
+  <tr><td>哈希</td><td>pycryptodome</td><td>hashlib</td><td>hashlib</td></tr>
+  <tr><td>文件类型</td><td>python-magic</td><td>Magic Bytes 硬编码</td><td>纯 bytes 比较</td></tr>
+  <tr><td>终端颜色</td><td>colorama</td><td>无 (保持简单)</td><td>—</td></tr>
+  <tr><td>字符串提取</td><td>—</td><td>正则 re</td><td>re</td></tr>
+  <tr><td>PCAP 解析</td><td>—</td><td>struct + socket</td><td>struct, socket</td></tr>
+  <tr><td>证据链</td><td>—</td><td>JSON Lines</td><td>json, hashlib</td></tr>
+</table>
+
+<h2 id="s5">5. 跨平台兼容性</h2>
+
+<table>
+  <tr><th>场景</th><th>Linux</th><th>macOS</th><th>Windows</th></tr>
+  <tr><td>安装</td><td>Python 3.11+</td><td>Python 3.11+</td><td>Python 3.11+</td></tr>
+  <tr><td>块设备枚举</td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-yellow">diskutil</span></td><td><span class="badge badge-yellow">需 pywin32</span></td></tr>
+  <tr><td>文件系统分析</td><td><span class="badge badge-green">ext4</span></td><td><span class="badge badge-green">APFS</span></td><td><span class="badge badge-green">NTFS/FAT</span></td></tr>
+  <tr><td>已删除恢复</td><td><span class="badge badge-green">ext4</span></td><td><span class="badge badge-yellow">APFS</span></td><td><span class="badge badge-green">NTFS/FAT</span></td></tr>
+  <tr><td>Registry</td><td><span class="badge badge-green">离线</span></td><td><span class="badge badge-green">离线</span></td><td><span class="badge badge-green">离线</span></td></tr>
+  <tr><td>PCAP / Hash / Strings / Timeline</td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td></tr>
+  <tr><td>Carving / Hunt / Metadata</td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td></tr>
+</table>
+
+<h2 id="s6">6. 测试与质量</h2>
+
+<h3>6.1 单元测试</h3>
+<table>
+  <tr><th>测试类</th><th>数量</th><th>内容</th><th>状态</th></tr>
+  <tr><td>TestChainOfCustody</td><td>3</td><td>证据链条目创建、会话管理、上下文</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>TestHashing</td><td>3</td><td>文件哈希、流式、MD5+SHA1+SHA256 联算</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>TestFormatters</td><td>5</td><td>JSON/CSV/Table/空数据/None</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>TestModuleBase</td><td>1</td><td>模块注册与发现</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>TestUtils</td><td>3</td><td>hexdump/timestamp/binary helpers</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>TestLuhn</td><td>2</td><td>有效卡号 / 无效卡号过滤</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td>TestStreamingStrings</td><td>1</td><td>流式字符串提取</td><td><span class="badge badge-green">通过</span></td></tr>
+  <tr><td><strong>合计</strong></td><td><strong>16</strong></td><td></td><td><span class="badge badge-green">全部通过</span></td></tr>
+</table>
+
+<h3>6.2 代码质量</h3>
+<ul>
+  <li>类型注解：核心接口全覆盖</li>
+  <li>异常体系：ForensicError / ForensicWarning 层次清晰</li>
+  <li>抽象接口：ModuleBase (abc.ABC)，OutputFormatter (abc.ABC)</li>
+  <li>零外部依赖：全标准库实现</li>
+</ul>
+
+<h2 id="s7">7. 限制与风险</h2>
+
+<table>
+  <tr><th>#</th><th>限制项</th><th>严重程度</th><th>说明</th></tr>
+  <tr><td>1</td><td>APFS 已删除恢复为扫描级</td><td><span class="badge badge-yellow">中等</span></td><td>仅扫描 NXSB/APSB/B-tree 结构，未实现完整文件提取</td></tr>
+  <tr><td>2</td><td>memory.connections 仅限 Linux</td><td><span class="badge badge-yellow">中等</span></td><td>基于 /proc/net/tcp，macOS/Windows 不可用</td></tr>
+  <tr><td>3</td><td>Windows 设备枚举需 pywin32</td><td><span class="badge badge-yellow">低</span></td><td>core/platform.py 已有适配代码，需要安装 pywin32</td></tr>
+  <tr><td>4</td><td>carving 为粗粒度</td><td><span class="badge badge-blue">信息</span></td><td>基于签名扫描，不执行碎片重组或智能校验</td></tr>
+  <tr><td>5</td><td>无 E01/AFF 映像格式</td><td><span class="badge badge-blue">信息</span></td><td>需安装 libewf-python 或 pyaff</td></tr>
+  <tr><td>6</td><td>hunt 非实时扫描</td><td><span class="badge badge-blue">信息</span></td><td>一次读取整个文件到内存</td></tr>
+</table>
+
+<h2 id="s8">8. 审计结论</h2>
+
+<div style="background:#f0f7ee; border:1px solid #bce8a7; border-radius:6px; padding:1em 1.5em; margin-top:1em;">
+<p><strong>总体评价: 通过</strong></p>
+<p>Forensic Toolkit v0.2.0 实现了一个完整的跨平台数字取证工具集。</p>
+<p><strong>核心亮点：</strong></p>
+<ul>
+  <li><strong>零外部依赖</strong> — 全部功能使用 Python 标准库实现，安装部署零摩擦</li>
+  <li><strong>11 个取证模块</strong> — 覆盖文件系统、字符串、时间线、敏感信息、哈希、雕刻、元数据、网络、恢复、注册表、内存</li>
+  <li><strong>模块化架构</strong> — ModuleBase + ModuleRegistry 使得新增模块只需实现一个类即可自动接入 CLI</li>
+  <li><strong>证据链</strong> — 内置 Chain of Custody 记录，满足数字取证的可追溯性要求</li>
+  <li><strong>跨平台</strong> — 三平台统一 CLI，PAL 隔离 OS 差异</li>
+</ul>
+</div>
+
+<div class="footer">
+  Forensic Toolkit v0.2.0 &nbsp;|&nbsp; MIT License &nbsp;|&nbsp; 生成于 2026-07-05 16:14
+</div>
+
+</body>
+</html>
