@@ -248,11 +248,15 @@ class FeatureCard(tk.Frame):
                  font=("Microsoft YaHei UI", 9),
                  anchor="w", justify=tk.LEFT).pack(fill=tk.X, padx=padding, pady=(0, 12))
 
-        # Action link
+        # Action link \u2014 \u5e95\u90e8\u5360\u4f4d\u9632\u6b62\u88ab\u5361\u7247\u8fb9\u6846\u88c1\u526a
         if action_text and action_command:
-            self._link = tk.Label(self._card, text=action_text + " \u203a", bg=Theme.CARD_BG,
-                                  fg=accent, font=("Microsoft YaHei UI", 9), cursor="hand2")
-            self._link.pack(anchor="w", padx=padding, pady=(0, padding))
+            act_frame = tk.Frame(self._card, bg=Theme.CARD_BG, height=32)
+            act_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=1, pady=(0, 1))
+            act_frame.pack_propagate(False)
+            self._link = tk.Label(act_frame, text=action_text + " \u203a", bg=Theme.CARD_BG,
+                                  fg=accent, font=("Microsoft YaHei UI", 10, "bold"),
+                                  cursor="hand2")
+            self._link.pack(side=tk.LEFT, padx=padding, pady=(4, 6))
             self._link.bind("<Button-1>", lambda e: action_command())
             self._link.bind("<Enter>", lambda e: self._link.configure(fg=Theme.ACCENT3))
             self._link.bind("<Leave>", lambda e: self._link.configure(fg=accent))
@@ -268,11 +272,8 @@ class FeatureCard(tk.Frame):
         self._hover = True
         Animation.animate_color(self._card, "highlightbackground",
                                 Theme.CARD_BORDER, Theme.CARD_HOVER_BORDER, 200, "ease_out")
-        # Lift effect
         self._card.configure(bg=Theme.CARD_HOVER_BG)
-        for child in self._card.winfo_children():
-            try: child.configure(bg=Theme.CARD_HOVER_BG)
-            except: pass
+        self._recursive_bg(self._card, Theme.CARD_HOVER_BG)
 
     def _on_leave(self, e=None) -> None:
         if not self._hover: return
@@ -280,9 +281,16 @@ class FeatureCard(tk.Frame):
         Animation.animate_color(self._card, "highlightbackground",
                                 Theme.CARD_HOVER_BORDER, Theme.CARD_BORDER, 200, "ease_out")
         self._card.configure(bg=Theme.CARD_BG)
-        for child in self._card.winfo_children():
-            try: child.configure(bg=Theme.CARD_BG)
-            except: pass
+        self._recursive_bg(self._card, Theme.CARD_BG)
+
+    def _recursive_bg(self, parent: tk.Widget, bg: str) -> None:
+        """递归设置子 widget 的背景色（Frame 和 Label 等）。"""
+        for child in parent.winfo_children():
+            try:
+                child.configure(bg=bg)
+            except Exception:
+                pass
+            self._recursive_bg(child, bg)
 
     def _on_click(self, e=None) -> None:
         self._pressed = True
