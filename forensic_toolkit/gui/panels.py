@@ -169,7 +169,7 @@ class DiskPanel(BasePanel):
 
     # 默认设备路径提示（各平台常用路径，无需 pywin32 也能手动输入）
     _DEFAULT_PATHS = {
-        "windows": [r"\\.\PhysicalDrive0", r"\\.\PhysicalDrive1", r"\\.\C:"],
+        "windows": [r"\\.\PhysicalDrive0", r"\\.\PhysicalDrive1", r"\\.\PhysicalDrive2"],
         "linux":   ["/dev/sda", "/dev/sdb", "/dev/nvme0n1", "/dev/mmcblk0"],
         "darwin":  ["/dev/rdisk0", "/dev/rdisk1", "/dev/disk0"],
     }
@@ -268,6 +268,15 @@ class DiskPanel(BasePanel):
                                     "提示: 点击'枚举设备'自动发现磁盘，"
                                     "或点击'选择磁盘映像文件'选择映像文件。")
             return
+
+        # Windows 非管理员提示
+        if Platform.info.is_windows and not Platform.info.is_admin:
+            if not messagebox.askyesno("权限提示",
+                    "当前未以管理员身份运行。\n\n"
+                    "直接读取物理磁盘需要管理员权限，否则可能失败。\n"
+                    "是否继续？（建议以管理员身份重启程序）"):
+                return
+
         def work():
             # 首先尝试匹配块设备（捕获 pywin32 缺失等异常）
             try:
@@ -292,8 +301,15 @@ class DiskPanel(BasePanel):
                     return result
                 # DiskModule 返回了 error
                 return result
+            except PermissionError:
+                admin_hint = ""
+                if not Platform.info.is_admin:
+                    admin_hint = "\n请以管理员身份运行本程序。"
+                if path.startswith(r"\\.\C:") or path.startswith(r"\\.\D:"):
+                    admin_hint += "\n提示: 避免使用卷路径(\\\\.\\C:)，请使用物理磁盘路径(\\\\.\\PhysicalDrive0)。"
+                return {"error": f"权限不足，无法访问: {path}{admin_hint}"}
             except Exception as e:
-                return {"error": f"无法访问设备: {e}"}
+                return {"error": f"无法访问设备: {e}\n提示: Windows 请使用 \\\\.\\PhysicalDrive0 格式路径，\n并确保以管理员身份运行。"}
         def done(result):
             self._result.load(result)
         self.run_async(work, done, progress_text=f"正在查询设备 {path}...")
