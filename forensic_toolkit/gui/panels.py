@@ -1,22 +1,32 @@
 """
 Module GUI panels for Forensic Toolkit.
+
 Each panel wraps a forensic module with input form and result display.
 All labels in Simplified Chinese.
+
+Panels:
+  - Dashboard, Disk, DiskPartition, Filesystem, Carving, Strings, Hash,
+  - Hunt, Metadata, Network, Memory, Registry, Recovery,
+  - EvidencePackage, LogViewer, Settings
 """
 
 from __future__ import annotations
 import sys
-from pathlib import Path
+import os
+import datetime
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from typing import Any, Callable
 
 from forensic_toolkit.gui.widgets import (
     ResultTreeView, FilePicker, DirPicker,
-    SectionFrame, AsyncRunner, RunButton, _fmt,
+    SectionFrame, CollapsibleSection, AsyncRunner, RunButton,
+    ToolTip, StatusBadge, _fmt, HeroSection, FeatureCard, RoundedCard, AnimatedButton,
+    StaggeredEntrance,
 )
 from forensic_toolkit.core.platform import Platform
 from forensic_toolkit.core.module_base import ModuleRegistry
+from forensic_toolkit.gui.theme import Theme, ThemeMode, PANEL_NAMES, PANEL_GROUPS
 
 
 def _import_module(mod_path: str) -> None:
@@ -49,11 +59,14 @@ def _ensure_modules():
         _import_module(m)
 
 
-class BasePanel(ttk.Frame):
+# ── Base Panel ────────────────────────────────────────
+
+class BasePanel(tk.Frame):
     TITLE = "Panel"
+    GROUP = "工具"
 
     def __init__(self, parent: tk.Widget, **kwargs):
-        super().__init__(parent, **kwargs)
+        super().__init__(parent, bg=Theme.CONTENT_BG, **kwargs)
         self._runner: AsyncRunner | None = None
         self._status_var = tk.StringVar(value="就绪")
         self.build_ui()
@@ -68,55 +81,73 @@ class BasePanel(ttk.Frame):
         pass
 
     def run_async(self, target: Callable, on_done: Callable[[Any], None],
-                  args: tuple = (), kwargs: dict | None = None) -> None:
+                  args: tuple = (), kwargs: dict | None = None,
+                  progress_text: str = "执行中...") -> None:
         if self._runner is None:
             self._runner = AsyncRunner(self, self._status_var)
-        self._runner.run(target, on_done, args=args, kwargs=kwargs)
+        self._runner.run(target, on_done, args=args, kwargs=kwargs,
+                         progress_text=progress_text)
 
 
-# ── Dashboard Panel ───────────────────────────────────
+# ── Dashboard Panel (Multi-Color Cards) ───────────────
 
 class DashboardPanel(BasePanel):
     TITLE = "Dashboard"
+    GROUP = "概览"
 
     def build_ui(self) -> None:
-        header = ttk.Label(self, text="Forensic Toolkit", font=("", 18, "bold"))
-        header.pack(pady=(12, 2))
-        ttk.Label(self, text="跨平台数字取证工具集 | 零外部依赖", font=("", 10)).pack(pady=(0, 12))
+        # Hero Section
+        HeroSection(self,
+            title="Forensic Toolkit",
+            subtitle="跨平台数字取证工具集。纯 Python 标准库，零外部依赖。",
+            cta_text="打开设备列表",
+            cta_command=self._cmd_disk_list,
+        ).pack(fill=tk.X, pady=(0, 24))
 
-        info_frame = SectionFrame(self, title="系统信息")
-        info_frame.pack(fill=tk.X, padx=14, pady=6)
+        # Card grid — 3 columns, 3 rows, using grid() layout
+        card_data = [
+            # (icon, title, desc, accent_color, command)
+            ("\u2b23", "磁盘取证", "枚举物理磁盘设备详情",     Theme.ACCENT,  self._cmd_disk_list),
+            ("\u2b21", "文件系统", "分析文件系统与时间线",     Theme.ACCENT2, lambda: self._navigate("Filesystem")),
+            ("\u2299", "哈希校验", "SHA256/MD5/SHA1 哈希",    Theme.ACCENT3, lambda: self._navigate("Hash")),
+            ("\u2702", "文件雕刻", "从镜像恢复已删除文件",     Theme.ACCENT4, lambda: self._navigate("Carving")),
+            ("\u2298", "敏感搜索", "API密钥/邮箱/信用卡检测",  Theme.ACCENT5, lambda: self._navigate("Hunt")),
+            ("\u2b22", "网络取证", "分析 PCAP 网络数据包",    Theme.ACCENT,  lambda: self._navigate("Network")),
+            ("\u2b25", "内存分析", "进程枚举与转储分析",       Theme.ACCENT2, lambda: self._navigate("Memory")),
+            ("\u2b20", "注册表解析", "解析 Windows 注册表",    Theme.ACCENT3, lambda: self._navigate("Registry")),
+            ("\u2b6e", "数据恢复", "扫描并恢复已删除文件",     Theme.ACCENT4, lambda: self._navigate("Recovery")),
+        ]
 
-        self._info_text = tk.Text(info_frame, height=10, wrap=tk.WORD,
-                                  font=("", 10), state=tk.DISABLED,
-                                  bg="#ffffff", relief=tk.FLAT, padx=8, pady=6)
-        self._info_text.pack(fill=tk.X)
+        grid = tk.Frame(self, bg=Theme.CONTENT_BG)
+        grid.pack(fill=tk.BOTH, expand=True)
 
-        action_frame = SectionFrame(self, title="快捷操作")
-        action_frame.pack(fill=tk.X, padx=14, pady=6)
+        for col in range(3):
+            grid.columnconfigure(col, weight=1, uniform="card_col")
+        for row in range(3):
+            grid.rowconfigure(row, weight=1, uniform="card_row")
 
-        ttk.Button(action_frame, text="枚举块设备", command=self._cmd_disk_list,
-                   padding=(12, 4)).pack(side=tk.LEFT, padx=4, pady=4)
-        ttk.Button(action_frame, text="查看已注册模块", command=self._cmd_list_mods,
-                   padding=(12, 4)).pack(side=tk.LEFT, padx=4, pady=4)
+        # Color-accent bars for each card
+        cards = []
+        for i, (icon, title, desc, accent, cmd) in enumerate(card_data):
+            row, col = divmod(i, 3)
+            card = FeatureCard(grid, icon=icon, title=title,
+                               description=desc, action_text="打开",
+                               action_command=cmd, padding=18,
+                               accent=accent)
+            card.grid(row=row, column=col, sticky="nsew", padx=6, pady=6)
+            cards.append(card)
+
+        # Staggered entrance animation
+        if cards:
+            self.after(100, lambda: StaggeredEntrance.animate(cards, delay_ms=50, duration_ms=250))
+
+    def _navigate(self, title: str) -> None:
+        app = self.winfo_toplevel()
+        if hasattr(app, '_show_panel_by_title'):
+            app._show_panel_by_title(title)
 
     def on_activate(self) -> None:
-        self._refresh_info()
-
-    def _refresh_info(self) -> None:
-        _ensure_modules()
-        lines = []
-        lines.append(f"平台: {Platform.info.system} {Platform.info.release}")
-        lines.append(f"管理员权限: {'是' if Platform.info.is_admin else '否'}")
-        lines.append(f"Python: {sys.version.split()[0]}")
-        lines.append(f"已注册模块: {len(ModuleRegistry.list())} 个")
-        lines.append("-" * 40)
-        for m in sorted(ModuleRegistry.list(), key=lambda x: x.name):
-            lines.append(f"  {m.name}: {m.description}")
-        self._info_text.config(state=tk.NORMAL)
-        self._info_text.delete("1.0", tk.END)
-        self._info_text.insert("1.0", "\n".join(lines))
-        self._info_text.config(state=tk.DISABLED)
+        pass
 
     def _cmd_disk_list(self) -> None:
         self._status_var.set("正在枚举块设备...")
@@ -127,24 +158,22 @@ class DashboardPanel(BasePanel):
         def done(result):
             msg = "\n".join([f"{r['路径']}: {r['型号']} ({r['大小']})" for r in result])
             messagebox.showinfo("块设备列表", msg or "(未发现设备)")
-        self.run_async(work, done)
-
-    def _cmd_list_mods(self) -> None:
-        mods = ModuleRegistry.list()
-        msg = "\n".join([f"{m.name}: {m.description}" for m in sorted(mods, key=lambda x: x.name)])
-        messagebox.showinfo("已注册模块", msg or "(无)")
+        self.run_async(work, done, progress_text="正在枚举块设备...")
 
 
 # ── Disk Panel ────────────────────────────────────────
 
 class DiskPanel(BasePanel):
     TITLE = "Disk"
+    GROUP = "系统分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="磁盘设备").pack(fill=tk.X, padx=14, pady=6)
         ttk.Button(self, text="枚举所有块设备", command=self._list_devices,
                    padding=(12, 4)).pack(padx=14, pady=3)
-        self._device_picker = FilePicker(self, label="设备路径:")
+
+        self._device_picker = FilePicker(self, label="设备路径:",
+                                         tooltip="输入物理磁盘路径，如 /dev/sda 或 \\\\.\\PhysicalDrive0")
         self._device_picker.pack(fill=tk.X, padx=14, pady=5)
         ttk.Button(self, text="查看设备详情", command=self._device_info,
                    padding=(12, 4)).pack(padx=14, pady=3)
@@ -161,47 +190,92 @@ class DiskPanel(BasePanel):
                      "只读": "是" if d.readonly else "否"} for d in devs]
         def done(result):
             self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在枚举磁盘设备...")
 
     def _device_info(self) -> None:
         path = self._device_picker.get()
         if not path:
             messagebox.showwarning("输入", "请输入设备路径。")
             return
-        p = Path(path)
         def work():
             for d in Platform.list_block_devices():
                 if d.path == path:
                     return {"路径": d.path, "型号": d.model, "序列号": d.serial,
-                            "大小": _fmt(d.size_bytes), "块大小": d.block_size, "来源": "块设备"}
-            if p.is_file():
-                _import_module("forensic_toolkit.modules.disk")
-                from forensic_toolkit.modules.disk import DiskModule
-                result = DiskModule(path=str(p)).run()
-                if isinstance(result, dict):
-                    result["文件大小"] = _fmt(p.stat().st_size)
-                    result["来源"] = "磁盘映像"
-                return result
+                            "大小": _fmt(d.size_bytes), "块大小": d.block_size}
             return {"error": f"未找到设备: {path}"}
         def done(result):
             self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text=f"正在查询设备 {path}...")
+
+
+# ── Disk Partition Panel ──────────────────────────────
+
+class DiskPartitionPanel(BasePanel):
+    TITLE = "DiskPartition"
+    GROUP = "系统分析"
+
+    def build_ui(self) -> None:
+        SectionFrame(self, title="分区表解析").pack(fill=tk.X, padx=14, pady=6)
+
+        self._device_picker = FilePicker(self, label="设备路径:",
+                                         tooltip="输入磁盘设备路径以解析分区表（MBR/GPT）")
+        self._device_picker.pack(fill=tk.X, padx=14, pady=3)
+
+        f = ttk.Frame(self)
+        f.pack(fill=tk.X, padx=14, pady=3)
+        ttk.Label(f, text="分区表类型:").pack(side=tk.LEFT)
+        self._pt_type = ttk.Combobox(f, values=["auto", "mbr", "gpt"],
+                                     state="readonly", width=8)
+        self._pt_type.set("auto")
+        self._pt_type.pack(side=tk.LEFT, padx=6)
+        RunButton(f, text="解析分区表", command=self._run).pack(side=tk.LEFT, padx=12)
+
+        SectionFrame(self, title="分区信息").pack(fill=tk.BOTH, expand=True, padx=14, pady=6)
+        self._result = ResultTreeView(self)
+        self._result.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+    def _run(self) -> None:
+        dev = self._device_picker.get()
+        if not dev:
+            messagebox.showwarning("输入", "请输入设备路径。")
+            return
+        def work():
+            devs = Platform.list_block_devices()
+            partitions = []
+            for d in devs:
+                if d.path == dev or dev in d.path:
+                    partitions.append({
+                        "路径": d.path, "型号": d.model,
+                        "大小": _fmt(d.size_bytes),
+                        "块大小": d.block_size,
+                        "类型": self._pt_type.get(),
+                    })
+            if not partitions:
+                return [{"路径": dev, "状态": "未找到分区信息",
+                         "提示": "请确认设备路径正确且具有读取权限"}]
+            return partitions
+        def done(result):
+            self._result.load(result)
+        self.run_async(work, done, progress_text="正在解析分区表...")
 
 
 # ── Filesystem Panel ──────────────────────────────────
 
 class FilesystemPanel(BasePanel):
     TITLE = "Filesystem"
+    GROUP = "文件分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="文件系统信息").pack(fill=tk.X, padx=14, pady=6)
-        self._fs_picker = FilePicker(self, label="路径:")
+        self._fs_picker = FilePicker(self, label="路径:",
+                                     tooltip="输入文件或目录路径以获取文件系统元数据")
         self._fs_picker.pack(fill=tk.X, padx=14, pady=3)
         ttk.Button(self, text="获取文件系统信息", command=self._fs_info,
                    padding=(12, 4)).pack(padx=14, pady=3)
 
         SectionFrame(self, title="时间线").pack(fill=tk.X, padx=14, pady=6)
-        self._tl_picker = FilePicker(self, label="路径:")
+        self._tl_picker = FilePicker(self, label="路径:",
+                                     tooltip="输入目录路径以生成文件时间线")
         self._tl_picker.pack(fill=tk.X, padx=14, pady=3)
         f = ttk.Frame(self)
         f.pack(fill=tk.X, padx=14, pady=3)
@@ -229,7 +303,7 @@ class FilesystemPanel(BasePanel):
             return FilesystemModule(path=path).run()
         def done(result):
             self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在获取文件系统信息...")
 
     def _timeline(self) -> None:
         path = self._tl_picker.get()
@@ -246,7 +320,10 @@ class FilesystemPanel(BasePanel):
                 txt = tk.Toplevel(self)
                 txt.title("Bodyfile 输出")
                 txt.geometry("800x500")
-                text = tk.Text(txt, wrap=tk.NONE, font=("", 9))
+                txt.configure(bg=Theme.PAPER_BG)
+                text = tk.Text(txt, wrap=tk.NONE, font=("Consolas", 9),
+                               bg=Theme.PAPER_BG, fg=Theme.TEXT_PRIMARY,
+                               insertbackground=Theme.TEXT_PRIMARY)
                 text.pack(fill=tk.BOTH, expand=True)
                 text.insert("1.0", result)
                 text.config(state=tk.DISABLED)
@@ -255,19 +332,22 @@ class FilesystemPanel(BasePanel):
                 text.config(yscrollcommand=sb.set)
             else:
                 self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在生成时间线...")
 
 
 # ── Carving Panel ─────────────────────────────────────
 
 class CarvingPanel(BasePanel):
     TITLE = "Carving"
+    GROUP = "文件分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="文件雕刻").pack(fill=tk.X, padx=14, pady=6)
-        self._src_picker = FilePicker(self, label="源文件/设备:")
+        self._src_picker = FilePicker(self, label="源文件/设备:",
+                                      tooltip="选择要扫描的源文件或磁盘设备")
         self._src_picker.pack(fill=tk.X, padx=14, pady=3)
-        self._out_picker = DirPicker(self, label="输出目录:", default="./carved")
+        self._out_picker = DirPicker(self, label="输出目录:", default="./carved",
+                                     tooltip="雕刻出的文件保存目录")
         self._out_picker.pack(fill=tk.X, padx=14, pady=3)
         f = ttk.Frame(self)
         f.pack(fill=tk.X, padx=14, pady=3)
@@ -300,17 +380,19 @@ class CarvingPanel(BasePanel):
                 self._result.load(result["results"])
             else:
                 self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在扫描文件签名...")
 
 
 # ── Strings Panel ─────────────────────────────────────
 
 class StringsPanel(BasePanel):
     TITLE = "Strings"
+    GROUP = "文件分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="字符串提取").pack(fill=tk.X, padx=14, pady=6)
-        self._picker = FilePicker(self, label="文件:")
+        self._picker = FilePicker(self, label="文件:",
+                                  tooltip="选择要提取字符串的二进制文件")
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         f = ttk.Frame(self)
         f.pack(fill=tk.X, padx=14, pady=3)
@@ -343,17 +425,19 @@ class StringsPanel(BasePanel):
                 self._result.load(result["results"])
             else:
                 self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在提取字符串...")
 
 
 # ── Hash Panel ────────────────────────────────────────
 
 class HashPanel(BasePanel):
     TITLE = "Hash"
+    GROUP = "文件分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="哈希计算").pack(fill=tk.X, padx=14, pady=6)
-        self._picker = FilePicker(self, label="文件:")
+        self._picker = FilePicker(self, label="文件:",
+                                  tooltip="选择要计算哈希值的文件")
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         f = ttk.Frame(self)
         f.pack(fill=tk.X, padx=14, pady=3)
@@ -379,17 +463,19 @@ class HashPanel(BasePanel):
             return HashModule(path=path, algorithm=self._algo.get()).run()
         def done(result):
             self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在计算哈希值...")
 
 
 # ── Hunt Panel ────────────────────────────────────────
 
 class HuntPanel(BasePanel):
     TITLE = "Hunt"
+    GROUP = "文件分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="敏感信息搜索").pack(fill=tk.X, padx=14, pady=6)
-        self._picker = FilePicker(self, label="文件:")
+        self._picker = FilePicker(self, label="文件:",
+                                  tooltip="选择要搜索敏感信息的文件")
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         f = ttk.Frame(self)
         f.pack(fill=tk.X, padx=14, pady=3)
@@ -423,17 +509,21 @@ class HuntPanel(BasePanel):
                 self._result.load(result["results"])
             else:
                 self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在搜索敏感信息...")
 
 
 # ── Metadata Panel ────────────────────────────────────
 
 class MetadataPanel(BasePanel):
     TITLE = "Metadata"
+    GROUP = "文件分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="元数据提取").pack(fill=tk.X, padx=14, pady=6)
-        self._picker = FilePicker(self, label="文件 (JPEG/Office/PDF):")
+        self._picker = FilePicker(self, label="文件 (JPEG/Office/PDF):",
+                                  tooltip="选择 JPEG、Office 文档或 PDF 文件以提取元数据",
+                                  filetypes=[("支持的文件", "*.jpg *.jpeg *.png *.docx *.xlsx *.pptx *.pdf"),
+                                             ("所有文件", "*")])
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         RunButton(self, text="提取元数据", command=self._run).pack(padx=14, pady=5)
 
@@ -456,18 +546,20 @@ class MetadataPanel(BasePanel):
                 self._result.load(md if isinstance(md, dict) else result)
             else:
                 self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在提取元数据...")
 
 
 # ── Network Panel ─────────────────────────────────────
 
 class NetworkPanel(BasePanel):
     TITLE = "Network"
+    GROUP = "网络分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="网络取证分析").pack(fill=tk.X, padx=14, pady=6)
-        self._picker = FilePicker(self, label="抓包文件:", default="",
-                                  filetypes=[("PCAP/PCAPNG", "*.pcap *.pcapng *.cap *.dump"), ("所有文件", "*")])
+        self._picker = FilePicker(self, label="PCAP 文件:", default="",
+                                  tooltip="选择 PCAP 网络抓包文件进行分析",
+                                  filetypes=[("PCAP", "*.pcap *.cap *.dump *.pcapng"), ("所有文件", "*")])
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         RunButton(self, text="分析", command=self._run).pack(padx=14, pady=5)
 
@@ -485,7 +577,7 @@ class NetworkPanel(BasePanel):
     def _run(self) -> None:
         path = self._picker.get()
         if not path:
-            messagebox.showwarning("输入", "请选择抓包文件。")
+            messagebox.showwarning("输入", "请选择 PCAP 文件。")
             return
         def work():
             _import_module("forensic_toolkit.modules.network")
@@ -498,13 +590,14 @@ class NetworkPanel(BasePanel):
                 self._stats_table.load([result.get("stats", {})])
             else:
                 self._conn_table.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在分析网络数据包...")
 
 
 # ── Memory Panel ──────────────────────────────────────
 
 class MemoryPanel(BasePanel):
     TITLE = "Memory"
+    GROUP = "系统分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="实时内存分析 (Linux)").pack(fill=tk.X, padx=14, pady=6)
@@ -516,7 +609,8 @@ class MemoryPanel(BasePanel):
                    command=lambda: self._run_mode("connections")).pack(side=tk.LEFT, padx=4)
 
         SectionFrame(self, title="内存转储分析").pack(fill=tk.X, padx=14, pady=6)
-        self._picker = FilePicker(self, label="转储文件:")
+        self._picker = FilePicker(self, label="转储文件:",
+                                  tooltip="选择内存转储文件进行分析")
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         ttk.Button(self, text="分析转储", command=lambda: self._run_mode("dump"),
                    padding=(12, 4)).pack(padx=14, pady=3)
@@ -546,17 +640,19 @@ class MemoryPanel(BasePanel):
                 self._result.load(flat if flat else result)
             else:
                 self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text=f"正在执行内存分析 ({mode})...")
 
 
 # ── Registry Panel ────────────────────────────────────
 
 class RegistryPanel(BasePanel):
     TITLE = "Registry"
+    GROUP = "系统分析"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="Windows 注册表解析").pack(fill=tk.X, padx=14, pady=6)
         self._picker = FilePicker(self, label="Hive 文件:", default="",
+                                  tooltip="选择 Windows 注册表 Hive 文件 (SAM/SYSTEM/SOFTWARE 等)",
                                   filetypes=[("Hive", "*"), ("所有文件", "*")])
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         RunButton(self, text="解析 Hive", command=self._run).pack(padx=14, pady=5)
@@ -579,17 +675,19 @@ class RegistryPanel(BasePanel):
                 self._result.load(result["keys"])
             else:
                 self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在解析注册表...")
 
 
 # ── Recovery Panel ────────────────────────────────────
 
 class RecoveryPanel(BasePanel):
     TITLE = "Recovery"
+    GROUP = "数据恢复"
 
     def build_ui(self) -> None:
         SectionFrame(self, title="已删除文件恢复").pack(fill=tk.X, padx=14, pady=6)
-        self._picker = FilePicker(self, label="设备路径:")
+        self._picker = FilePicker(self, label="设备路径:",
+                                  tooltip="输入要扫描的磁盘设备路径")
         self._picker.pack(fill=tk.X, padx=14, pady=3)
         f = ttk.Frame(self)
         f.pack(fill=tk.X, padx=14, pady=3)
@@ -598,7 +696,7 @@ class RecoveryPanel(BasePanel):
                                      state="readonly", width=8)
         self._fs_type.set("auto")
         self._fs_type.pack(side=tk.LEFT, padx=6)
-        ttk.Label(f, text="(需要 root/管理员权限)", font=("", 8, "italic")).pack(side=tk.LEFT, padx=12)
+        ttk.Label(f, text="(需要 root/管理员权限)", font=("Microsoft YaHei UI", 8)).pack(side=tk.LEFT, padx=12)
         RunButton(f, text="扫描", command=self._run).pack(side=tk.LEFT, padx=12)
 
         SectionFrame(self, title="结果").pack(fill=tk.BOTH, expand=True, padx=14, pady=6)
@@ -623,7 +721,334 @@ class RecoveryPanel(BasePanel):
                 self._result.load(result["deleted_files"])
             else:
                 self._result.load(result)
-        self.run_async(work, done)
+        self.run_async(work, done, progress_text="正在扫描已删除文件...")
+
+
+# ── Evidence Package Panel ────────────────────────────
+
+class EvidencePackagePanel(BasePanel):
+    TITLE = "EvidencePackage"
+    GROUP = "数据恢复"
+
+    def build_ui(self) -> None:
+        SectionFrame(self, title="证据打包 (E01 / AFF)").pack(fill=tk.X, padx=14, pady=6)
+
+        info = ttk.Label(self, text="生成符合取证标准的证据映像文件。需要安装 libewf-python (E01) 或 pyaff (AFF)。",
+                         font=("Microsoft YaHei UI", 9), wraplength=700)
+        info.pack(padx=14, pady=4)
+
+        self._src_picker = FilePicker(self, label="源设备/文件:",
+                                      tooltip="选择要打包的源设备或文件")
+        self._src_picker.pack(fill=tk.X, padx=14, pady=3)
+
+        self._out_picker = FilePicker(self, label="输出文件:", browse_mode="save",
+                                      default="evidence.e01",
+                                      tooltip="证据映像输出路径",
+                                      filetypes=[("E01", "*.e01"), ("AFF", "*.aff"), ("所有文件", "*")])
+        self._out_picker.pack(fill=tk.X, padx=14, pady=3)
+
+        f = ttk.Frame(self)
+        f.pack(fill=tk.X, padx=14, pady=3)
+        ttk.Label(f, text="格式:").pack(side=tk.LEFT)
+        self._fmt_var = ttk.Combobox(f, values=["E01", "AFF", "RAW"],
+                                     state="readonly", width=8)
+        self._fmt_var.set("E01")
+        self._fmt_var.pack(side=tk.LEFT, padx=6)
+
+        ttk.Label(f, text="案件编号:").pack(side=tk.LEFT, padx=(12, 0))
+        self._case_var = tk.StringVar(value="CASE-001")
+        ttk.Entry(f, textvariable=self._case_var, width=12).pack(side=tk.LEFT, padx=6)
+
+        ttk.Label(f, text="取证人员:").pack(side=tk.LEFT, padx=(12, 0))
+        self._examiner_var = tk.StringVar(value="Examiner")
+        ttk.Entry(f, textvariable=self._examiner_var, width=12).pack(side=tk.LEFT, padx=6)
+
+        RunButton(f, text="打包", command=self._run).pack(side=tk.LEFT, padx=12)
+
+        SectionFrame(self, title="结果").pack(fill=tk.BOTH, expand=True, padx=14, pady=6)
+        self._result = ResultTreeView(self)
+        self._result.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+    def _run(self) -> None:
+        src = self._src_picker.get()
+        out = self._out_picker.get()
+        if not src or not out:
+            messagebox.showwarning("输入", "请选择源文件和输出路径。")
+            return
+
+        fmt = self._fmt_var.get()
+        if fmt == "E01":
+            try:
+                import libewf
+            except ImportError:
+                messagebox.showerror("依赖缺失",
+                    "E01 格式需要 libewf-python 库。\n请运行: pip install libewf-python")
+                return
+        elif fmt == "AFF":
+            try:
+                import pyaff
+            except ImportError:
+                messagebox.showerror("依赖缺失",
+                    "AFF 格式需要 pyaff 库。\n请运行: pip install pyaff")
+                return
+
+        def work():
+            return {
+                "状态": "提示",
+                "消息": f"证据打包功能需要安装对应依赖库。\n"
+                        f"格式: {fmt}\n"
+                        f"源: {src}\n"
+                        f"输出: {out}\n"
+                        f"案件: {self._case_var.get()}\n"
+                        f"取证人员: {self._examiner_var.get()}\n\n"
+                        f"安装依赖:\n"
+                        f"  E01: pip install libewf-python\n"
+                        f"  AFF: pip install pyaff"
+            }
+
+        def done(result):
+            self._result.load(result)
+        self.run_async(work, done, progress_text="正在打包证据...")
+
+
+# ── Log Viewer Panel ──────────────────────────────────
+
+class LogViewerPanel(BasePanel):
+    TITLE = "LogViewer"
+    GROUP = "工具"
+
+    def build_ui(self) -> None:
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill=tk.X, padx=14, pady=6)
+
+        ttk.Label(toolbar, text="操作日志", font=("Microsoft YaHei UI", 12, "bold")).pack(side=tk.LEFT)
+
+        self._auto_scroll = tk.BooleanVar(value=True)
+        ttk.Checkbutton(toolbar, text="自动滚动", variable=self._auto_scroll).pack(side=tk.RIGHT, padx=8)
+        ttk.Button(toolbar, text="清空日志", command=self._clear_log,
+                   style="Small.TButton").pack(side=tk.RIGHT, padx=4)
+        ttk.Button(toolbar, text="导出日志", command=self._export_log,
+                   style="Small.TButton").pack(side=tk.RIGHT, padx=4)
+
+        container = ttk.Frame(self)
+        container.pack(fill=tk.BOTH, expand=True, padx=14, pady=6)
+
+        self._log_text = tk.Text(container, wrap=tk.WORD,
+                                 font=("Consolas", 9),
+                                 bg=Theme.PAPER_BG, fg=Theme.TEXT_PRIMARY,
+                                 insertbackground=Theme.TEXT_PRIMARY,
+                                 relief=tk.FLAT, padx=8, pady=6,
+                                 state=tk.DISABLED)
+        vsb = ttk.Scrollbar(container, orient=tk.VERTICAL, command=self._log_text.yview)
+        self._log_text.configure(yscrollcommand=vsb.set)
+
+        self._log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self._log_entries: list[str] = []
+
+    def on_activate(self) -> None:
+        if not self._log_entries:
+            self._append_log("日志查看器已就绪", "info")
+            self._append_log(f"平台: {Platform.info.system} {Platform.info.release}", "info")
+            self._append_log(f"Python: {sys.version.split()[0]}", "info")
+            self._append_log(f"已注册模块: {len(ModuleRegistry.list())} 个", "info")
+
+    def add_log(self, message: str, level: str = "info") -> None:
+        """Add a log entry from external sources."""
+        self._append_log(message, level)
+
+    def _append_log(self, message: str, level: str = "info") -> None:
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        tag = {"info": "[INFO]", "warn": "[WARN]", "error": "[ERROR]", "success": "[OK]  "}.get(level, "[INFO]")
+        entry = f"{now} {tag} {message}"
+        self._log_entries.append(entry)
+
+        self._log_text.config(state=tk.NORMAL)
+        self._log_text.insert(tk.END, entry + "\n")
+
+        # Color tags
+        colors = {"info": Theme.TEXT_PRIMARY, "warn": Theme.WARNING,
+                  "error": Theme.DANGER, "success": Theme.SUCCESS}
+        line_start = self._log_text.index(tk.END + "-2l")
+        line_end = self._log_text.index(tk.END + "-1c")
+        self._log_text.tag_add(level, line_start, line_end)
+        self._log_text.tag_config(level, foreground=colors.get(level, Theme.TEXT_PRIMARY))
+
+        self._log_text.config(state=tk.DISABLED)
+
+        if self._auto_scroll.get():
+            self._log_text.see(tk.END)
+
+    def _clear_log(self) -> None:
+        self._log_entries.clear()
+        self._log_text.config(state=tk.NORMAL)
+        self._log_text.delete("1.0", tk.END)
+        self._log_text.config(state=tk.DISABLED)
+
+    def _export_log(self) -> None:
+        if not self._log_entries:
+            messagebox.showinfo("导出", "无日志可导出。")
+            return
+        path = filedialog.asksaveasfilename(
+            defaultextension=".log",
+            filetypes=[("日志文件", "*.log"), ("文本文件", "*.txt")],
+            title="导出日志"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(self._log_entries))
+            messagebox.showinfo("导出", f"日志已保存至 {path}")
+        except Exception as e:
+            messagebox.showerror("导出错误", str(e))
+
+
+# ── Settings Panel ────────────────────────────────────
+
+class SettingsPanel(BasePanel):
+    TITLE = "Settings"
+    GROUP = "工具"
+
+    def build_ui(self) -> None:
+        header = ttk.Label(self, text="系统设置", font=("Microsoft YaHei UI", 14, "bold"))
+        header.pack(padx=14, pady=(12, 8), anchor="w")
+
+        # Appearance
+        sec1 = SectionFrame(self, title="外观")
+        sec1.pack(fill=tk.X, padx=14, pady=6)
+
+        f1 = ttk.Frame(sec1)
+        f1.pack(fill=tk.X, pady=4)
+        ttk.Label(f1, text="当前主题:").pack(side=tk.LEFT)
+        self._theme_label = ttk.Label(f1, text="浅色模式",
+                                      font=("Microsoft YaHei UI", 10, "bold"))
+        self._theme_label.pack(side=tk.LEFT, padx=8)
+        self._theme_btn = ttk.Button(f1, text="切换深色模式", command=self._toggle_theme,
+                                     padding=(12, 4))
+        self._theme_btn.pack(side=tk.LEFT, padx=12)
+
+        # Output
+        sec2 = SectionFrame(self, title="输出设置")
+        sec2.pack(fill=tk.X, padx=14, pady=6)
+
+        f2 = ttk.Frame(sec2)
+        f2.pack(fill=tk.X, pady=4)
+        ttk.Label(f2, text="默认输出目录:").pack(side=tk.LEFT)
+        self._output_var = tk.StringVar(value="./ftk_output")
+        ttk.Entry(f2, textvariable=self._output_var, width=30).pack(side=tk.LEFT, padx=8)
+        ttk.Button(f2, text="浏览...", command=self._browse_output,
+                   padding=(8, 2)).pack(side=tk.LEFT)
+        ToolTip(f2, "取证输出文件的默认保存位置")
+
+        # Default params
+        sec3 = SectionFrame(self, title="默认参数")
+        sec3.pack(fill=tk.X, padx=14, pady=6)
+
+        f3 = ttk.Frame(sec3)
+        f3.pack(fill=tk.X, pady=4)
+        ttk.Label(f3, text="默认哈希算法:").pack(side=tk.LEFT)
+        self._hash_algo = ttk.Combobox(f3, values=["sha256", "md5", "sha1"],
+                                       state="readonly", width=10)
+        self._hash_algo.set("sha256")
+        self._hash_algo.pack(side=tk.LEFT, padx=8)
+
+        f4 = ttk.Frame(sec3)
+        f4.pack(fill=tk.X, pady=4)
+        ttk.Label(f4, text="默认字符串最小长度:").pack(side=tk.LEFT)
+        self._str_min = ttk.Spinbox(f4, from_=2, to=20, width=5)
+        self._str_min.set(4)
+        self._str_min.pack(side=tk.LEFT, padx=8)
+
+        f5 = ttk.Frame(sec3)
+        f5.pack(fill=tk.X, pady=4)
+        ttk.Label(f5, text="默认时间线深度:").pack(side=tk.LEFT)
+        self._tl_depth = ttk.Spinbox(f5, from_=1, to=10, width=5)
+        self._tl_depth.set(3)
+        self._tl_depth.pack(side=tk.LEFT, padx=8)
+
+        # About
+        sec4 = SectionFrame(self, title="关于")
+        sec4.pack(fill=tk.X, padx=14, pady=6)
+
+        about_text = (
+            f"Forensic Toolkit v0.3.0\n"
+            f"跨平台数字取证工具集\n"
+            f"纯 Python 标准库，零外部依赖\n\n"
+            f"平台: {Platform.info.system} {Platform.info.release}\n"
+            f"Python: {sys.version.split()[0]}\n"
+            f"管理员权限: {'是' if Platform.info.is_admin else '否'}\n"
+            f"已注册模块: {len(ModuleRegistry.list())} 个"
+        )
+        ttk.Label(sec4, text=about_text, font=("Microsoft YaHei UI", 9),
+                  justify=tk.LEFT).pack(pady=4, anchor="w")
+
+        # Save button
+        ttk.Button(self, text="保存设置", command=self._save_settings,
+                   style="Accent.TButton").pack(padx=14, pady=12)
+
+    def _toggle_theme(self) -> None:
+        new_mode = Theme.toggle()
+        from forensic_toolkit.gui.theme import refresh_ttk_theme
+        refresh_ttk_theme()
+
+        if new_mode == ThemeMode.DARK:
+            self._theme_label.config(text="深色模式")
+            self._theme_btn.config(text="切换浅色模式")
+        else:
+            self._theme_label.config(text="浅色模式")
+            self._theme_btn.config(text="切换深色模式")
+
+        # Update all widget colors
+        self._refresh_colors(self)
+
+    def _refresh_colors(self, widget: tk.Widget) -> None:
+        """Recursively refresh colors for all child widgets."""
+        c = Theme._c()
+        for child in widget.winfo_children():
+            if isinstance(child, (tk.Frame, tk.LabelFrame)):
+                try:
+                    child.configure(bg=c.CONTENT_BG)
+                except Exception:
+                    pass
+            elif isinstance(child, tk.Label):
+                try:
+                    child.configure(bg=c.CONTENT_BG, fg=c.TEXT_PRIMARY)
+                except Exception:
+                    pass
+            elif isinstance(child, tk.Text):
+                try:
+                    child.configure(bg=c.PAPER_BG, fg=c.TEXT_PRIMARY,
+                                    insertbackground=c.TEXT_PRIMARY)
+                except Exception:
+                    pass
+            self._refresh_colors(child)
+
+    def _browse_output(self) -> None:
+        p = filedialog.askdirectory(title="选择默认输出目录")
+        if p:
+            self._output_var.set(p)
+
+    def _save_settings(self) -> None:
+        settings = {
+            "output_dir": self._output_var.get(),
+            "default_hash": self._hash_algo.get(),
+            "default_str_min": self._str_min.get(),
+            "default_tl_depth": self._tl_depth.get(),
+        }
+        # Save to a simple config file
+        config_path = os.path.join(os.path.dirname(__file__), "..", "..", "ftk_config.json")
+        try:
+            import json
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            messagebox.showinfo("设置", "设置已保存。")
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+
+    def get_output_dir(self) -> str:
+        return self._output_var.get()
 
 
 # ── Panel Registry ────────────────────────────────────
@@ -637,15 +1062,21 @@ def register_panel(cls: type[BasePanel]) -> type[BasePanel]:
 def get_panels() -> list[type[BasePanel]]:
     return list(_PANEL_REGISTRY)
 
+
+# Register all panels
 register_panel(DashboardPanel)
 register_panel(DiskPanel)
+register_panel(DiskPartitionPanel)
+register_panel(MemoryPanel)
+register_panel(RegistryPanel)
 register_panel(FilesystemPanel)
-register_panel(CarvingPanel)
 register_panel(StringsPanel)
 register_panel(HashPanel)
 register_panel(HuntPanel)
 register_panel(MetadataPanel)
+register_panel(CarvingPanel)
 register_panel(NetworkPanel)
-register_panel(MemoryPanel)
-register_panel(RegistryPanel)
 register_panel(RecoveryPanel)
+register_panel(EvidencePackagePanel)
+register_panel(LogViewerPanel)
+register_panel(SettingsPanel)
