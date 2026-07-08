@@ -40,6 +40,7 @@ class MainWindow:
         self.root.geometry("1280x800")
         self.root.minsize(960, 600)
         self.root.configure(bg=Theme.CONTENT_BG)
+        self.root._main_window = self  # 供面板导航反向引用
 
         self._style = setup_ttk_theme()
         self._status_var = tk.StringVar(value="")
@@ -263,6 +264,7 @@ class MainWindow:
         refresh_ttk_theme(self._style)
         self._theme_btn.config(text="\u2600  浅色" if new_mode == ThemeMode.DARK else "\u263e  深色")
         self.root.configure(bg=Theme.CONTENT_BG)
+        self.root._main_window = self  # 供面板导航反向引用
         self._content.configure(bg=Theme.CONTENT_BG)
         self._panel_container.configure(bg=Theme.CONTENT_BG)
 

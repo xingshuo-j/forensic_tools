@@ -142,9 +142,9 @@ class DashboardPanel(BasePanel):
             self.after(100, lambda: StaggeredEntrance.animate(cards, delay_ms=50, duration_ms=250))
 
     def _navigate(self, title: str) -> None:
-        app = self.winfo_toplevel()
-        if hasattr(app, '_show_panel_by_title'):
-            app._show_panel_by_title(title)
+        root = self.winfo_toplevel()
+        if hasattr(root, '_main_window'):
+            root._main_window._show_panel_by_title(title)
 
     def on_activate(self) -> None:
         pass
@@ -198,11 +198,22 @@ class DiskPanel(BasePanel):
             messagebox.showwarning("输入", "请输入设备路径。")
             return
         def work():
+            # 首先尝试匹配块设备
             for d in Platform.list_block_devices():
                 if d.path == path:
                     return {"路径": d.path, "型号": d.model, "序列号": d.serial,
                             "大小": _fmt(d.size_bytes), "块大小": d.block_size}
-            return {"error": f"未找到设备: {path}"}
+            # 若不是块设备，尝试作为磁盘映像文件（ISO/IMG等）解析
+            from pathlib import Path as _Path
+            p = _Path(path)
+            if p.is_file():
+                from forensic_toolkit.modules.disk import DiskModule
+                result = DiskModule(path=path).run()
+                if isinstance(result, dict):
+                    result["source"] = "disk_image"
+                    result["file_size_human"] = _fmt(p.stat().st_size)
+                return result
+            return {"error": f"未找到设备或磁盘映像: {path}"}
         def done(result):
             self._result.load(result)
         self.run_async(work, done, progress_text=f"正在查询设备 {path}...")
@@ -240,19 +251,39 @@ class DiskPartitionPanel(BasePanel):
             messagebox.showwarning("输入", "请输入设备路径。")
             return
         def work():
+            # 首先尝试匹配块设备
             devs = Platform.list_block_devices()
-            partitions = []
             for d in devs:
                 if d.path == dev or dev in d.path:
-                    partitions.append({
+                    return [{
                         "路径": d.path, "型号": d.model,
                         "大小": _fmt(d.size_bytes),
                         "块大小": d.block_size,
                         "类型": self._pt_type.get(),
-                    })
-            if not partitions:
-                return [{"路径": dev, "状态": "未找到分区信息",
-                         "提示": "请确认设备路径正确且具有读取权限"}]
+                    }]
+            # 若不是块设备，尝试作为磁盘映像文件（ISO/IMG等）解析
+            from pathlib import Path as _Path
+            p = _Path(dev)
+            if p.is_file():
+                from forensic_toolkit.modules.disk import DiskModule
+                result = DiskModule(path=dev).run()
+                if isinstance(result, dict) and "partitions" in result:
+                    out = [{"路径": dev, "分区表类型": result.get("partition_table", "未知"),
+                            "来源": "disk_image"}]
+                    for pt in result["partitions"]:
+                        out.append({
+                            "分区号": pt.get("number", ""),
+                            "类型": pt.get("type", ""),
+                            "可引导": "是" if pt.get("bootable") else "否",
+                            "起始LBA": pt.get("start_lba", ""),
+                            "扇区数": pt.get("size_sectors", ""),
+                        })
+                    return out
+                if isinstance(result, dict):
+                    result["来源"] = "disk_image"
+                    return result
+            return [{"路径": dev, "状态": "未找到分区信息",
+                     "提示": "请确认设备路径正确且具有读取权限（ISO/IMG 镜像请使用磁盘分析面板）"}]
             return partitions
         def done(result):
             self._result.load(result)
