@@ -167,6 +167,13 @@ class DiskPanel(BasePanel):
     TITLE = "Disk"
     GROUP = "系统分析"
 
+    # 默认设备路径提示（各平台常用路径，无需 pywin32 也能手动输入）
+    _DEFAULT_PATHS = {
+        "windows": [r"\\.\PhysicalDrive0", r"\\.\PhysicalDrive1", r"\\.\C:"],
+        "linux":   ["/dev/sda", "/dev/sdb", "/dev/nvme0n1", "/dev/mmcblk0"],
+        "darwin":  ["/dev/rdisk0", "/dev/rdisk1", "/dev/disk0"],
+    }
+
     def build_ui(self) -> None:
         SectionFrame(self, title="磁盘设备").pack(fill=tk.X, padx=14, pady=6)
 
@@ -183,6 +190,11 @@ class DiskPanel(BasePanel):
         picker_frame.columnconfigure(1, weight=1)
         ToolTip(self._device_combo, "从枚举的设备中选择，或手动输入路径（支持磁盘映像文件）")
 
+        # 预填平台默认路径作为备选
+        defaults = self._DEFAULT_PATHS.get(Platform.info.system, [])
+        self._device_combo["values"] = defaults
+        self._enumerated = False
+
         ttk.Button(picker_frame, text="枚举设备", command=self._enumerate_devices,
                    padding=(10, 2)).grid(row=0, column=2, padx=2, pady=4)
 
@@ -198,21 +210,46 @@ class DiskPanel(BasePanel):
         self._result = ResultTreeView(self)
         self._result.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
+    def on_activate(self) -> None:
+        if not self._enumerated:
+            self._enumerate_devices()
+
     def _enumerate_devices(self) -> None:
         """枚举块设备并填充下拉列表"""
         def work():
-            devs = Platform.list_block_devices()
+            try:
+                devs = Platform.list_block_devices()
+            except Exception as e:
+                return {"_error": str(e)}
             return [{"路径": d.path, "型号": d.model, "序列号": d.serial,
                      "大小": _fmt(d.size_bytes), "块大小": d.block_size,
                      "只读": "是" if d.readonly else "否"} for d in devs]
         def done(result):
+            if isinstance(result, dict) and "_error" in result:
+                # 枚举失败（如缺少 pywin32），保留默认路径，提示用户
+                self._result.load([{"状态": "枚举失败",
+                                    "原因": result["_error"],
+                                    "提示": "可手动在上方输入设备路径，或点击'选择磁盘映像文件'"}])
+                self._status_var.set("枚举失败，请手动输入路径或选择映像文件")
+                self._enumerated = True
+                return
+            if not isinstance(result, list):
+                return
             self._result.load(result)
-            # 用设备路径填充下拉列表
+            self._enumerated = True
             paths = [r["路径"] for r in result]
-            self._device_combo["values"] = paths
+            # 合并默认路径 + 枚举路径，去重
+            defaults = self._DEFAULT_PATHS.get(Platform.info.system, [])
+            all_paths = list(dict.fromkeys(defaults + paths))  # 保序去重
+            self._device_combo["values"] = all_paths
             if paths:
                 self._device_combo.set(paths[0])
                 self._status_var.set(f"已枚举 {len(paths)} 个设备")
+            elif defaults:
+                self._device_combo.set(defaults[0])
+                self._status_var.set("未发现块设备，可使用默认路径或手动输入")
+            else:
+                self._status_var.set("未发现块设备，请手动输入路径")
         self.run_async(work, done, progress_text="正在枚举磁盘设备...")
 
     def _browse_image(self) -> None:
@@ -232,11 +269,14 @@ class DiskPanel(BasePanel):
                                     "或点击'选择磁盘映像文件'选择映像文件。")
             return
         def work():
-            # 首先尝试匹配块设备
-            for d in Platform.list_block_devices():
-                if d.path == path:
-                    return {"路径": d.path, "型号": d.model, "序列号": d.serial,
-                            "大小": _fmt(d.size_bytes), "块大小": d.block_size}
+            # 首先尝试匹配块设备（捕获 pywin32 缺失等异常）
+            try:
+                for d in Platform.list_block_devices():
+                    if d.path == path:
+                        return {"路径": d.path, "型号": d.model, "序列号": d.serial,
+                                "大小": _fmt(d.size_bytes), "块大小": d.block_size}
+            except Exception:
+                pass
             # 若不是块设备，尝试作为磁盘映像文件（ISO/IMG等）解析
             from pathlib import Path as _Path
             p = _Path(path)
@@ -259,6 +299,8 @@ class DiskPartitionPanel(BasePanel):
     TITLE = "DiskPartition"
     GROUP = "系统分析"
 
+    _DEFAULT_PATHS = DiskPanel._DEFAULT_PATHS  # 复用 DiskPanel 的默认路径
+
     def build_ui(self) -> None:
         SectionFrame(self, title="分区表解析").pack(fill=tk.X, padx=14, pady=6)
 
@@ -273,6 +315,10 @@ class DiskPartitionPanel(BasePanel):
         self._device_combo.grid(row=0, column=1, sticky="ew", padx=(0, 6))
         picker_frame.columnconfigure(1, weight=1)
         ToolTip(self._device_combo, "从枚举的设备中选择，或手动输入路径")
+
+        defaults = self._DEFAULT_PATHS.get(Platform.info.system, [])
+        self._device_combo["values"] = defaults
+        self._enumerated = False
 
         ttk.Button(picker_frame, text="枚举", command=self._enumerate_devices,
                    padding=(8, 2)).grid(row=0, column=2, padx=2)
@@ -292,10 +338,22 @@ class DiskPartitionPanel(BasePanel):
         self._result = ResultTreeView(self)
         self._result.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
+    def on_activate(self) -> None:
+        if not self._enumerated:
+            self._enumerate_devices()
+
     def _enumerate_devices(self) -> None:
-        devs = Platform.list_block_devices()
-        paths = [d.path for d in devs]
-        self._device_combo["values"] = paths
+        try:
+            devs = Platform.list_block_devices()
+            paths = [d.path for d in devs]
+        except Exception as e:
+            self._status_var.set(f"枚举失败: {e}")
+            self._enumerated = True
+            return
+        defaults = self._DEFAULT_PATHS.get(Platform.info.system, [])
+        all_paths = list(dict.fromkeys(defaults + paths))
+        self._device_combo["values"] = all_paths
+        self._enumerated = True
         if paths:
             self._device_combo.set(paths[0])
             self._status_var.set(f"已枚举 {len(paths)} 个设备")
@@ -318,16 +376,19 @@ class DiskPartitionPanel(BasePanel):
                                     "或点击'映像文件'选择磁盘映像。")
             return
         def work():
-            # 首先尝试匹配块设备
-            devs = Platform.list_block_devices()
-            for d in devs:
-                if d.path == dev or dev in d.path:
-                    return [{
-                        "路径": d.path, "型号": d.model,
-                        "大小": _fmt(d.size_bytes),
-                        "块大小": d.block_size,
-                        "类型": self._pt_type.get(),
-                    }]
+            # 首先尝试匹配块设备（捕获 pywin32 缺失等异常）
+            try:
+                devs = Platform.list_block_devices()
+                for d in devs:
+                    if d.path == dev or dev in d.path:
+                        return [{
+                            "路径": d.path, "型号": d.model,
+                            "大小": _fmt(d.size_bytes),
+                            "块大小": d.block_size,
+                            "类型": self._pt_type.get(),
+                        }]
+            except Exception:
+                pass
             # 若不是块设备，尝试作为磁盘映像文件（ISO/IMG等）解析
             from pathlib import Path as _Path
             p = _Path(dev)
