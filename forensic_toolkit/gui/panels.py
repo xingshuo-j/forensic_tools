@@ -277,17 +277,23 @@ class DiskPanel(BasePanel):
                                 "大小": _fmt(d.size_bytes), "块大小": d.block_size}
             except Exception:
                 pass
-            # 若不是块设备，尝试作为磁盘映像文件（ISO/IMG等）解析
+            # 若不是已知块设备，尝试用 DiskModule 解析（支持物理设备和映像文件）
             from pathlib import Path as _Path
+            from forensic_toolkit.modules.disk import DiskModule
             p = _Path(path)
-            if p.is_file():
-                from forensic_toolkit.modules.disk import DiskModule
+            try:
                 result = DiskModule(path=path).run()
-                if isinstance(result, dict):
-                    result["source"] = "disk_image"
-                    result["file_size_human"] = _fmt(p.stat().st_size)
+                if isinstance(result, dict) and "error" not in result:
+                    if p.is_file():
+                        result["source"] = "disk_image"
+                        result["file_size_human"] = _fmt(p.stat().st_size)
+                    else:
+                        result["source"] = "raw_device"
+                    return result
+                # DiskModule 返回了 error
                 return result
-            return {"error": f"未找到设备或磁盘映像: {path}"}
+            except Exception as e:
+                return {"error": f"无法访问设备: {e}"}
         def done(result):
             self._result.load(result)
         self.run_async(work, done, progress_text=f"正在查询设备 {path}...")
@@ -389,30 +395,33 @@ class DiskPartitionPanel(BasePanel):
                         }]
             except Exception:
                 pass
-            # 若不是块设备，尝试作为磁盘映像文件（ISO/IMG等）解析
+            # 若不是已知块设备，用 DiskModule 解析（支持物理设备和映像文件）
             from pathlib import Path as _Path
+            from forensic_toolkit.modules.disk import DiskModule
             p = _Path(dev)
-            if p.is_file():
-                from forensic_toolkit.modules.disk import DiskModule
+            try:
                 result = DiskModule(path=dev).run()
-                if isinstance(result, dict) and "partitions" in result:
-                    out = [{"路径": dev, "分区表类型": result.get("partition_table", "未知"),
-                            "来源": "disk_image"}]
-                    for pt in result["partitions"]:
-                        out.append({
-                            "分区号": pt.get("number", ""),
-                            "类型": pt.get("type", ""),
-                            "可引导": "是" if pt.get("bootable") else "否",
-                            "起始LBA": pt.get("start_lba", ""),
-                            "扇区数": pt.get("size_sectors", ""),
-                        })
-                    return out
-                if isinstance(result, dict):
+            except Exception as e:
+                return [{"路径": dev, "状态": f"无法访问: {e}"}]
+            if isinstance(result, dict) and "partitions" in result:
+                source = "disk_image" if p.is_file() else "raw_device"
+                out = [{"路径": dev, "分区表类型": result.get("partition_table", "未知"),
+                        "来源": source}]
+                for pt in result["partitions"]:
+                    out.append({
+                        "分区号": pt.get("number", ""),
+                        "类型": pt.get("type", ""),
+                        "可引导": "是" if pt.get("bootable") else "否",
+                        "起始LBA": pt.get("start_lba", ""),
+                        "扇区数": pt.get("size_sectors", ""),
+                    })
+                return out
+            if isinstance(result, dict):
+                if p.is_file():
                     result["来源"] = "disk_image"
-                    return result
+                return result
             return [{"路径": dev, "状态": "未找到分区信息",
-                     "提示": "请确认设备路径正确且具有读取权限（ISO/IMG 镜像请使用磁盘分析面板）"}]
-            return partitions
+                     "提示": "请确认设备路径正确且具有读取权限"}]
         def done(result):
             self._result.load(result)
         self.run_async(work, done, progress_text="正在解析分区表...")
