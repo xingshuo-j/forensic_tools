@@ -107,7 +107,7 @@ class DashboardPanel(BasePanel):
         # Card grid — 3 columns, 3 rows, using grid() layout
         card_data = [
             # (icon, title, desc, accent_color, command)
-            ("\u2b23", "磁盘取证", "枚举物理磁盘设备详情",     Theme.ACCENT,  self._cmd_disk_list),
+            ("\u2b23", "磁盘取证", "磁盘设备枚举与分区解析",     Theme.ACCENT,  lambda: self._navigate("Disk")),
             ("\u2b21", "文件系统", "分析文件系统与时间线",     Theme.ACCENT2, lambda: self._navigate("Filesystem")),
             ("\u2299", "哈希校验", "SHA256/MD5/SHA1 哈希",    Theme.ACCENT3, lambda: self._navigate("Hash")),
             ("\u2702", "文件雕刻", "从镜像恢复已删除文件",     Theme.ACCENT4, lambda: self._navigate("Carving")),
