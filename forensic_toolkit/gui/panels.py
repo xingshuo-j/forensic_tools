@@ -169,20 +169,37 @@ class DiskPanel(BasePanel):
 
     def build_ui(self) -> None:
         SectionFrame(self, title="磁盘设备").pack(fill=tk.X, padx=14, pady=6)
-        ttk.Button(self, text="枚举所有块设备", command=self._list_devices,
-                   padding=(12, 4)).pack(padx=14, pady=3)
 
-        self._device_picker = FilePicker(self, label="设备路径:",
-                                         tooltip="输入物理磁盘路径，如 /dev/sda 或 \\\\.\\PhysicalDrive0")
-        self._device_picker.pack(fill=tk.X, padx=14, pady=5)
-        ttk.Button(self, text="查看设备详情", command=self._device_info,
-                   padding=(12, 4)).pack(padx=14, pady=3)
+        # 设备选择行：下拉列表 + 枚举按钮 + 手动输入
+        picker_frame = ttk.Frame(self)
+        picker_frame.pack(fill=tk.X, padx=14, pady=5)
+        picker_frame.columnconfigure(0, weight=1)
+
+        ttk.Label(picker_frame, text="设备路径:", font=("Microsoft YaHei UI", 10)).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
+        self._device_var = tk.StringVar()
+        self._device_combo = ttk.Combobox(picker_frame, textvariable=self._device_var,
+                                           font=("Consolas", 10))
+        self._device_combo.grid(row=0, column=1, sticky="ew", padx=(0, 6), pady=4)
+        picker_frame.columnconfigure(1, weight=1)
+        ToolTip(self._device_combo, "从枚举的设备中选择，或手动输入路径（支持磁盘映像文件）")
+
+        ttk.Button(picker_frame, text="枚举设备", command=self._enumerate_devices,
+                   padding=(10, 2)).grid(row=0, column=2, padx=2, pady=4)
+
+        # 操作按钮行
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=14, pady=3)
+        ttk.Button(btn_frame, text="查看设备详情", command=self._device_info,
+                   padding=(12, 4)).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(btn_frame, text="选择磁盘映像文件...", command=self._browse_image,
+                   padding=(12, 4)).pack(side=tk.LEFT)
 
         SectionFrame(self, title="结果").pack(fill=tk.BOTH, expand=True, padx=14, pady=6)
         self._result = ResultTreeView(self)
         self._result.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
-    def _list_devices(self) -> None:
+    def _enumerate_devices(self) -> None:
+        """枚举块设备并填充下拉列表"""
         def work():
             devs = Platform.list_block_devices()
             return [{"路径": d.path, "型号": d.model, "序列号": d.serial,
@@ -190,12 +207,29 @@ class DiskPanel(BasePanel):
                      "只读": "是" if d.readonly else "否"} for d in devs]
         def done(result):
             self._result.load(result)
+            # 用设备路径填充下拉列表
+            paths = [r["路径"] for r in result]
+            self._device_combo["values"] = paths
+            if paths:
+                self._device_combo.set(paths[0])
+                self._status_var.set(f"已枚举 {len(paths)} 个设备")
         self.run_async(work, done, progress_text="正在枚举磁盘设备...")
 
+    def _browse_image(self) -> None:
+        """选择磁盘映像文件（ISO/IMG等）"""
+        path = filedialog.askopenfilename(
+            title="选择磁盘映像文件",
+            filetypes=[("磁盘映像", "*.img *.iso *.vhd *.vhdx *.vmdk *.dd *.raw *.e01 *.aff"),
+                       ("所有文件", "*")])
+        if path:
+            self._device_var.set(path)
+
     def _device_info(self) -> None:
-        path = self._device_picker.get()
+        path = self._device_var.get().strip()
         if not path:
-            messagebox.showwarning("输入", "请输入设备路径。")
+            messagebox.showwarning("输入", "请选择或输入设备路径。\n\n"
+                                    "提示: 点击'枚举设备'自动发现磁盘，"
+                                    "或点击'选择磁盘映像文件'选择映像文件。")
             return
         def work():
             # 首先尝试匹配块设备
@@ -228,9 +262,22 @@ class DiskPartitionPanel(BasePanel):
     def build_ui(self) -> None:
         SectionFrame(self, title="分区表解析").pack(fill=tk.X, padx=14, pady=6)
 
-        self._device_picker = FilePicker(self, label="设备路径:",
-                                         tooltip="输入磁盘设备路径以解析分区表（MBR/GPT）")
-        self._device_picker.pack(fill=tk.X, padx=14, pady=3)
+        picker_frame = ttk.Frame(self)
+        picker_frame.pack(fill=tk.X, padx=14, pady=3)
+        picker_frame.columnconfigure(0, weight=1)
+
+        ttk.Label(picker_frame, text="设备路径:", font=("Microsoft YaHei UI", 10)).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self._device_var = tk.StringVar()
+        self._device_combo = ttk.Combobox(picker_frame, textvariable=self._device_var,
+                                           font=("Consolas", 10))
+        self._device_combo.grid(row=0, column=1, sticky="ew", padx=(0, 6))
+        picker_frame.columnconfigure(1, weight=1)
+        ToolTip(self._device_combo, "从枚举的设备中选择，或手动输入路径")
+
+        ttk.Button(picker_frame, text="枚举", command=self._enumerate_devices,
+                   padding=(8, 2)).grid(row=0, column=2, padx=2)
+        ttk.Button(picker_frame, text="映像文件...", command=self._browse_image,
+                   padding=(8, 2)).grid(row=0, column=3, padx=(2, 0))
 
         f = ttk.Frame(self)
         f.pack(fill=tk.X, padx=14, pady=3)
@@ -245,10 +292,30 @@ class DiskPartitionPanel(BasePanel):
         self._result = ResultTreeView(self)
         self._result.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
+    def _enumerate_devices(self) -> None:
+        devs = Platform.list_block_devices()
+        paths = [d.path for d in devs]
+        self._device_combo["values"] = paths
+        if paths:
+            self._device_combo.set(paths[0])
+            self._status_var.set(f"已枚举 {len(paths)} 个设备")
+        else:
+            self._status_var.set("未发现块设备")
+
+    def _browse_image(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择磁盘映像文件",
+            filetypes=[("磁盘映像", "*.img *.iso *.vhd *.vhdx *.vmdk *.dd *.raw *.e01 *.aff"),
+                       ("所有文件", "*")])
+        if path:
+            self._device_var.set(path)
+
     def _run(self) -> None:
-        dev = self._device_picker.get()
+        dev = self._device_var.get().strip()
         if not dev:
-            messagebox.showwarning("输入", "请输入设备路径。")
+            messagebox.showwarning("输入", "请选择或输入设备路径。\n\n"
+                                    "提示: 点击'枚举'自动发现磁盘设备，"
+                                    "或点击'映像文件'选择磁盘映像。")
             return
         def work():
             # 首先尝试匹配块设备
