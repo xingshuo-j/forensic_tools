@@ -237,27 +237,28 @@ class MainWindow:
         if self._animating_sidebar:
             return
         self._animating_sidebar = True
-        target = 0 if self._sidebar_collapsed else self._sidebar_width
-        from_w = self._sidebar_width if self._sidebar_collapsed else 0
-        self._sidebar_collapsed = not self._sidebar_collapsed
 
         if self._sidebar_collapsed:
-            self._sidebar_toggle_btn.config(text="\u2630  展开侧栏")
-        else:
+            # 当前已折叠 → 展开
+            target, from_w = self._sidebar_width, 0
             self._sidebar.pack(side=tk.LEFT, fill=tk.Y, before=self._content)
+        else:
+            # 当前已展开 → 折叠
+            target, from_w = 0, self._sidebar_width
+
+        self._sidebar_collapsed = not self._sidebar_collapsed
 
         def _done() -> None:
             if self._sidebar_collapsed:
                 self._sidebar.pack_forget()
-            else:
-                self._sidebar_toggle_btn.config(text="\u2630  收起侧栏")
+            self._sidebar_toggle_btn.config(
+                text="☰  展开侧栏" if self._sidebar_collapsed else "☰  收起侧栏"
+            )
             self._animating_sidebar = False
 
         Animation.animate_width(self._sidebar, from_w, target,
                                 duration_ms=220, easing="ease_out",
                                 on_complete=_done)
-
-    # ── Theme Toggle ─────────────────────────────────
 
     def _toggle_theme(self) -> None:
         new_mode = Theme.toggle()
